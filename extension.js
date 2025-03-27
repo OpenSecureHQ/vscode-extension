@@ -1,22 +1,26 @@
 const vscode = require('vscode');
+const { createServer } = require('./server');
+
+let server;
 
 /**
+ * VS Code calls this when your extension is activated.
  * @param {vscode.ExtensionContext} context
  */
 function activate(context) {
-  console.log('Congratulations, your extension "opensecure" is now active!');
+  console.log('Extension "OpenSecure" activated.');
 
-  const disposable = vscode.commands.registerCommand(
-    'opensecure.ops-test',
-    function () {
-      vscode.window.showInformationMessage('Hello World from opensecure!');
-    }
-  );
-
-  context.subscriptions.push(disposable);
+  // Start the Express server
+  server = createServer();
 }
 
-function deactivate() {}
+function deactivate() {
+  // Clean up if you like
+  if (server) {
+    server.close();
+    console.log('Server stopped.');
+  }
+}
 
 module.exports = {
   activate,
