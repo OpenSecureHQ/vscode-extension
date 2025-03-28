@@ -1,32 +1,34 @@
-// server.js
 const express = require('express');
-const bodyParser = require('body-parser');
+const { parseRequestResponse } = require('./utils/parser');
 
-/**
- * Creates and returns an Express server listening on port 3700.
- */
-function createServer() {
+function createServer(port = 3700) {
   const app = express();
 
-  // Store the raw request data as text
-  app.use(bodyParser.text({ type: '*/*' }));
+  app.use(express.json({ limit: '50mb' }));
 
-  // Receive POST data from Burp
-  app.post('/burp-data', (req, res) => {
-    console.log(
-      '=== Raw HTTP Request from Burp ===\n',
-      decodeURIComponent(req.body),
-      '\n======================'
-    );
-    res.status(200).send('OK');
+  app.post('/burp-data', async (req, res) => {
+    try {
+      const rawRequest = JSON.stringify(req.body);
+      const parsed = await parseRequestResponse(rawRequest);
+      // console.log('Parsed Data:', JSON.stringify(parsed, null, 2));
+
+      console.log(parsed.request.raw);
+      console.log('\n');
+      console.log(parsed.response.raw);
+    } catch (error) {
+      console.error('Parsing error:', error);
+      res.status(400).json({ error: error.message });
+    }
   });
 
-  // Start the server
-  const server = app.listen(3700, () => {
-    console.log('Listening on http://localhost:3700');
+  return app.listen(port, () => {
+    console.log(`Server running on http://localhost:${port}`);
   });
-
-  return server;
 }
 
 module.exports = { createServer };
+
+// Quick start if run directly
+if (require.main === module) {
+  createServer();
+}
