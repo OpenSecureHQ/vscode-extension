@@ -1,12 +1,26 @@
 const vscode = require('vscode');
 
 /**
+ * Tree item representing a host
+ */
+class HostItem extends vscode.TreeItem {
+  constructor(host, data) {
+    super(host, vscode.TreeItemCollapsibleState.Collapsed);
+    this.host = host;
+    this.data = data;
+    this.contextValue = 'host';
+    this.iconPath = new vscode.ThemeIcon('globe');
+  }
+}
+
+/**
  * Tree item representing an API endpoint
  */
 class EndpointItem extends vscode.TreeItem {
-  constructor(endpoint, data) {
+  constructor(endpoint, host, data) {
     super(endpoint, vscode.TreeItemCollapsibleState.Collapsed);
     this.endpoint = endpoint;
+    this.host = host;
     this.data = data;
     this.contextValue = 'endpoint';
     this.iconPath = new vscode.ThemeIcon('symbol-module');
@@ -30,9 +44,10 @@ class EndpointItem extends vscode.TreeItem {
  * Tree item representing an HTTP method
  */
 class MethodItem extends vscode.TreeItem {
-  constructor(method, endpoint, requests) {
+  constructor(method, host, endpoint, requests) {
     super(method, vscode.TreeItemCollapsibleState.Collapsed);
     this.method = method;
+    this.host = host;
     this.endpoint = endpoint;
     this.requests = requests;
     this.contextValue = 'method';
@@ -45,9 +60,10 @@ class MethodItem extends vscode.TreeItem {
  * Tree item representing an HTTP request
  */
 class RequestItem extends vscode.TreeItem {
-  constructor(label, data) {
+  constructor(label, data, index) {
     super(label, vscode.TreeItemCollapsibleState.None);
     this.data = data;
+    this.index = index;
     this.contextValue = 'request';
     this.tooltip = `${data.request.method} ${data.request.url}`;
 
@@ -76,6 +92,7 @@ class RequestItem extends vscode.TreeItem {
 }
 
 module.exports = {
+  HostItem,
   EndpointItem,
   MethodItem,
   RequestItem,

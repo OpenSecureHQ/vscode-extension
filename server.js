@@ -16,6 +16,8 @@ function createServer(port = 3700, dataCallback) {
       const rawRequest = JSON.stringify(req.body);
       const parsed = await parseRequestResponse(rawRequest);
 
+      // console.log(parsed.request);
+
       console.log('Received request data');
 
       // Send the data back to the VS Code extension

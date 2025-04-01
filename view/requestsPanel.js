@@ -14,7 +14,7 @@ class RequestPanel {
     const panel = vscode.window.createWebviewPanel(
       'requestDetails',
       `${data.request.method} ${
-        new URL(data.request.url, 'http://example.com').pathname
+        new URL(data.request.url, `http://${data.request.host}`).pathname
       }`,
       vscode.ViewColumn.One,
       {
@@ -26,15 +26,26 @@ class RequestPanel {
     // Generate HTML content
     panel.webview.html = this.generateHtml(data);
 
-    // Extract endpoint for reference
-    const url = new URL(data.request.url, 'http://example.com');
+    // Extract host and endpoint for reference
+    const host = data.request.host || 'unknown-host';
+    const url = new URL(data.request.url, `http://${host}`);
     const endpoint = url.pathname;
     const method = data.request.method;
 
     // Find index of this request
-    const requestIndex = storage
-      .getEndpoints()
-      [endpoint][method].findIndex(req => req.timestamp === data.timestamp);
+    const hosts = storage.getHosts();
+    if (
+      !hosts[host] ||
+      !hosts[host].endpoints[endpoint] ||
+      !hosts[host].endpoints[endpoint][method]
+    ) {
+      console.log('Error finding request in storage');
+      return;
+    }
+
+    const requestIndex = hosts[host].endpoints[endpoint][method].findIndex(
+      req => req.timestamp.getTime() === data.timestamp.getTime()
+    );
 
     // Handle messages from the webview
     panel.webview.onDidReceiveMessage(
@@ -42,6 +53,7 @@ class RequestPanel {
         switch (message.command) {
           case 'updateRequestNotes':
             storage.updateRequestNotes(
+              host,
               endpoint,
               method,
               requestIndex,
@@ -49,7 +61,7 @@ class RequestPanel {
             );
             break;
           case 'updateEndpointNotes':
-            storage.updateEndpointNotes(endpoint, message.text);
+            storage.updateEndpointNotes(host, endpoint, message.text);
             break;
         }
       },
@@ -64,9 +76,16 @@ class RequestPanel {
    * @returns {string} HTML content
    */
   static generateHtml(data) {
-    const url = new URL(data.request.url, 'http://example.com');
+    const host = data.request.host || 'unknown-host';
+    const url = new URL(data.request.url, `http://${host}`);
     const endpoint = url.pathname;
-    const endpointNotes = storage.getEndpoints()[endpoint].notes || '';
+
+    const hosts = storage.getHosts();
+    const endpointNotes =
+      (hosts[host] &&
+        hosts[host].endpoints[endpoint] &&
+        hosts[host].endpoints[endpoint].notes) ||
+      '';
 
     return `<!DOCTYPE html>
 <html lang="en">
@@ -116,6 +135,11 @@ class RequestPanel {
             padding: 5px;
             font-family: var(--vscode-font-family);
         }
+        .host-info {
+            font-weight: bold;
+            margin-bottom: 5px;
+            color: var(--vscode-terminal-ansiBlue);
+        }
     </style>
 </head>
 <body>
@@ -123,6 +147,7 @@ class RequestPanel {
         <div class="panel">
             <div class="panel-header">Endpoint Notes</div>
             <div class="panel-content">
+                <div class="host-info">${host}${endpoint}</div>
                 <textarea id="endpoint-notes" class="notes-area">${this.escapeHtml(
                   endpointNotes
                 )}</textarea>
@@ -141,13 +166,12 @@ class RequestPanel {
         <div class="panel">
             <div class="panel-header">Request Details</div>
             <div class="panel-content">
-                <strong>Method:</strong> ${data.request.method}<br>
-                <strong>URL:</strong> ${data.request.url}<br>
-                <strong>Headers:</strong><br>
+                <div class="host-info">${host}</div>
+                ${data.request.method}&nbsp;${data.request.url}<br>
                 <pre>${this.formatHeaders(data.request.headers)}</pre>
                 ${
                   data.request.body
-                    ? `<strong>Body:</strong><br><pre>${this.escapeAndFormatBody(
+                    ? `<pre>${this.escapeAndFormatBody(
                         data.request.body,
                         data.request.headers['content-type']
                       )}</pre>`
@@ -162,16 +186,15 @@ class RequestPanel {
         <div class="panel">
             <div class="panel-header">Response Details</div>
             <div class="panel-content">
-                <strong>Status:</strong> <span class="${this.getStatusClass(
+                <span class="${this.getStatusClass(
                   data.response.statusCode
                 )}">${data.response.statusCode} ${
                 data.response.statusMessage
               }</span><br>
-                <strong>Headers:</strong><br>
                 <pre>${this.formatHeaders(data.response.headers)}</pre>
                 ${
                   data.response.body
-                    ? `<strong>Body:</strong><br><pre>${this.escapeAndFormatBody(
+                    ? `<pre>${this.escapeAndFormatBody(
                         data.response.body,
                         data.response.headers['content-type']
                       )}</pre>`

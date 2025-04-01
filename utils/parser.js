@@ -5,8 +5,9 @@ const { HTTPParser } = require('http-parser-js');
  * {
  *   request: {
  *     raw: 'Full raw HTTP request string',
- *     method: 'GET/POST/etc',
- *     url: 'http://example.com/path',
+ *     method: 'GET',
+ *     url: '/path',
+ *     host: 'example.com',  // New field
  *     version: '1.1',
  *     headers: {
  *       'host': 'example.com',
@@ -30,6 +31,43 @@ const { HTTPParser } = require('http-parser-js');
  * }
  */
 
+// Map HTTP method codes to their string representations
+const HTTP_METHODS = {
+  0: 'DELETE',
+  1: 'GET',
+  2: 'HEAD',
+  3: 'POST',
+  4: 'PUT',
+  5: 'CONNECT',
+  6: 'OPTIONS',
+  7: 'TRACE',
+  8: 'COPY',
+  9: 'LOCK',
+  10: 'MKCOL',
+  11: 'MOVE',
+  12: 'PROPFIND',
+  13: 'PROPPATCH',
+  14: 'SEARCH',
+  15: 'UNLOCK',
+  16: 'BIND',
+  17: 'REBIND',
+  18: 'UNBIND',
+  19: 'ACL',
+  20: 'REPORT',
+  21: 'MKACTIVITY',
+  22: 'CHECKOUT',
+  23: 'MERGE',
+  24: 'M-SEARCH',
+  25: 'NOTIFY',
+  26: 'SUBSCRIBE',
+  27: 'UNSUBSCRIBE',
+  28: 'PATCH',
+  29: 'PURGE',
+  30: 'MKCALENDAR',
+  31: 'LINK',
+  32: 'UNLINK',
+};
+
 function parseHttpMessage(rawMessage, isResponse = false) {
   const parser = new HTTPParser(
     isResponse ? HTTPParser.RESPONSE : HTTPParser.REQUEST
@@ -50,8 +88,12 @@ function parseHttpMessage(rawMessage, isResponse = false) {
         parsed.statusCode = info.statusCode;
         parsed.statusMessage = info.statusMessage;
       } else {
-        parsed.method = info.method;
+        // Convert method code to string
+        parsed.method = HTTP_METHODS[info.method] || `UNKNOWN(${info.method})`;
         parsed.url = info.url;
+
+        // Extract host from headers
+        parsed.host = parsed.headers.host || '';
       }
     };
 

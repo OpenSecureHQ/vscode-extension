@@ -37,16 +37,18 @@ function activate(context) {
   );
 
   // Register command to add endpoint notes
+  // In the addEndpointNotes command
   context.subscriptions.push(
     vscode.commands.registerCommand('openSecure.addEndpointNotes', item => {
       vscode.window
         .showInputBox({
           prompt: 'Enter notes for this endpoint',
-          value: storage.getEndpoints()[item.endpoint].notes || '',
+          value:
+            storage.getHosts()[item.host].endpoints[item.endpoint].notes || '',
         })
         .then(input => {
           if (input !== undefined) {
-            storage.updateEndpointNotes(item.endpoint, input);
+            storage.updateEndpointNotes(item.host, item.endpoint, input);
           }
         });
     })

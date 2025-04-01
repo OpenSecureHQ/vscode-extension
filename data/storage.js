@@ -3,7 +3,21 @@
  */
 class DataStorage {
   constructor() {
-    this.endpoints = {};
+    // Structure:
+    // {
+    //   hosts: {
+    //     'example.com': {
+    //       endpoints: {
+    //         '/path': {
+    //           notes: 'Endpoint notes',
+    //           GET: [...requests],
+    //           POST: [...requests]
+    //         }
+    //       }
+    //     }
+    //   }
+    // }
+    this.hosts = {};
     this.listeners = [];
   }
 
@@ -43,30 +57,41 @@ class DataStorage {
       url = new URL(data.request.url);
     } catch (e) {
       // Handle relative URLs
-      url = new URL(data.request.url, 'http://example.com');
+      url = new URL(
+        data.request.url,
+        `http://${data.request.host || 'unknown-host'}`
+      );
     }
 
     const endpoint = url.pathname;
     const method = data.request.method;
+    const host = data.request.host || 'unknown-host';
+
+    // Initialize host object if it doesn't exist
+    if (!this.hosts[host]) {
+      this.hosts[host] = {
+        endpoints: {},
+      };
+    }
 
     // Initialize endpoint object if it doesn't exist
-    if (!this.endpoints[endpoint]) {
-      this.endpoints[endpoint] = {};
+    if (!this.hosts[host].endpoints[endpoint]) {
+      this.hosts[host].endpoints[endpoint] = {};
     }
 
     // Initialize method array if it doesn't exist
-    if (!this.endpoints[endpoint][method]) {
-      this.endpoints[endpoint][method] = [];
+    if (!this.hosts[host].endpoints[endpoint][method]) {
+      this.hosts[host].endpoints[endpoint][method] = [];
     }
 
     // Add the request data
-    this.endpoints[endpoint][method].push({
+    this.hosts[host].endpoints[endpoint][method].push({
       timestamp: new Date(),
       request: data.request,
       response: data.response,
       notes: {
         request: '',
-        endpoint: this.endpoints[endpoint].notes || '',
+        endpoint: this.hosts[host].endpoints[endpoint].notes || '',
       },
     });
 
@@ -76,39 +101,42 @@ class DataStorage {
 
   /**
    * Update notes for an endpoint
+   * @param {string} host The host
    * @param {string} endpoint Path of the endpoint
    * @param {string} notes New notes content
    */
-  updateEndpointNotes(endpoint, notes) {
-    if (this.endpoints[endpoint]) {
-      this.endpoints[endpoint].notes = notes;
+  updateEndpointNotes(host, endpoint, notes) {
+    if (this.hosts[host] && this.hosts[host].endpoints[endpoint]) {
+      this.hosts[host].endpoints[endpoint].notes = notes;
       this.notifyChange();
     }
   }
 
   /**
    * Update notes for a specific request
+   * @param {string} host The host
    * @param {string} endpoint Path of the endpoint
    * @param {string} method HTTP method
    * @param {number} index Index of the request
    * @param {string} notes New notes content
    */
-  updateRequestNotes(endpoint, method, index, notes) {
+  updateRequestNotes(host, endpoint, method, index, notes) {
     if (
-      this.endpoints[endpoint] &&
-      this.endpoints[endpoint][method] &&
-      this.endpoints[endpoint][method][index]
+      this.hosts[host] &&
+      this.hosts[host].endpoints[endpoint] &&
+      this.hosts[host].endpoints[endpoint][method] &&
+      this.hosts[host].endpoints[endpoint][method][index]
     ) {
-      this.endpoints[endpoint][method][index].notes.request = notes;
+      this.hosts[host].endpoints[endpoint][method][index].notes.request = notes;
     }
   }
 
   /**
-   * Get all endpoints
-   * @returns {Object} The endpoints data
+   * Get all hosts
+   * @returns {Object} The hosts data
    */
-  getEndpoints() {
-    return this.endpoints;
+  getHosts() {
+    return this.hosts;
   }
 }
 

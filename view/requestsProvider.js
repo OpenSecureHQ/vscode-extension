@@ -1,5 +1,10 @@
 const vscode = require('vscode');
-const { EndpointItem, MethodItem, RequestItem } = require('./treeItems');
+const {
+  HostItem,
+  EndpointItem,
+  MethodItem,
+  RequestItem,
+} = require('./treeItems');
 const storage = require('../data/storage');
 
 /**
@@ -36,26 +41,40 @@ class RequestsProvider {
    * @returns {Array} The child elements
    */
   getChildren(element) {
-    const endpoints = storage.getEndpoints();
+    const hosts = storage.getHosts();
 
     if (!element) {
-      // Root elements are endpoints
-      return Object.keys(endpoints).map(
-        endpoint => new EndpointItem(endpoint, endpoints[endpoint])
+      // Root elements are hosts
+      return Object.keys(hosts).map(host => new HostItem(host, hosts[host]));
+    } else if (element instanceof HostItem) {
+      // Host level - endpoints
+      return Object.keys(element.data.endpoints).map(
+        endpoint =>
+          new EndpointItem(
+            endpoint,
+            element.host,
+            element.data.endpoints[endpoint]
+          )
       );
     } else if (element instanceof EndpointItem) {
-      // Method-level items
+      // Endpoint level - methods
       const methodKeys = Object.keys(element.data).filter(
         key => key !== 'notes'
       );
       return methodKeys.map(
-        method => new MethodItem(method, element.endpoint, element.data[method])
+        method =>
+          new MethodItem(
+            method,
+            element.host,
+            element.endpoint,
+            element.data[method]
+          )
       );
     } else if (element instanceof MethodItem) {
-      // Request-level items
+      // Method level - requests
       return element.requests.map(
         (req, index) =>
-          new RequestItem(`${req.timestamp.toLocaleTimeString()}`, req)
+          new RequestItem(`${req.timestamp.toLocaleTimeString()}`, req, index)
       );
     }
     return [];
