@@ -1,0 +1,32 @@
+{
+  "name": "HTTP",
+  "scopeName": "source.http",
+  "patterns": [
+    {
+      "match": "^(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\\b",
+      "name": "keyword.http.method"
+    },
+    {
+      "match": "^HTTP/[0-9]\\.[0-9]\\s+([0-9]{3})\\s+(.*)$",
+      "captures": {
+        "1": {
+          "name": "constant.numeric.http.status"
+        },
+        "2": {
+          "name": "string.http.status.message"
+        }
+      }
+    },
+    {
+      "match": "^([A-Za-z\\-]+):\\s+(.*)$",
+      "captures": {
+        "1": {
+          "name": "variable.http.header.key"
+        },
+        "2": {
+          "name": "string.http.header.value"
+        }
+      }
+    }
+  ]
+}

@@ -1,7 +1,7 @@
 const vscode = require('vscode');
 const { createServer } = require('./server');
 const RequestsProvider = require('./view/requestsProvider');
-const RequestPanel = require('./view/requestsPanel');
+const HttpRequestNotebookProvider = require('./view/notebookProvider');
 const storage = require('./data/storage');
 
 /**
@@ -19,6 +19,10 @@ function activate(context) {
     treeDataProvider: requestsProvider,
   });
 
+  // Create notebook provider
+  const notebookProvider = new HttpRequestNotebookProvider(storage);
+  context.subscriptions.push(notebookProvider.register());
+
   // Start the server to listen for BURP data
   const server = createServer(3700, data => storage.addRequest(data));
 
@@ -29,14 +33,17 @@ function activate(context) {
     })
   );
 
-  // Register view request command
+  // Replace viewRequest with viewRequestAsNotebook
   context.subscriptions.push(
-    vscode.commands.registerCommand('openSecure.viewRequest', data => {
-      RequestPanel.create(data);
-    })
+    vscode.commands.registerCommand(
+      'openSecure.viewRequestAsNotebook',
+      data => {
+        notebookProvider.openRequestNotebook(data);
+      }
+    )
   );
 
-  // Register command to add endpoint notes
+  // Keep the endpoint notes command
   context.subscriptions.push(
     vscode.commands.registerCommand('openSecure.addEndpointNotes', item => {
       vscode.window
@@ -59,13 +66,11 @@ function activate(context) {
         server.close();
         console.log('Server stopped');
       }
+      notebookProvider.dispose();
     },
   });
 }
 
-/**
- * Deactivate the extension
- */
 function deactivate() {}
 
 module.exports = {

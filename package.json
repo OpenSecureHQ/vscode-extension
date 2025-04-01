@@ -14,6 +14,28 @@
   ],
   "main": "./extension.js",
   "contributes": {
+    "contributes": {
+      "languages": [
+        {
+          "id": "http",
+          "aliases": [
+            "HTTP",
+            "http"
+          ],
+          "extensions": [
+            ".http",
+            ".rest"
+          ]
+        }
+      ],
+      "grammars": [
+        {
+          "language": "http",
+          "scopeName": "source.http",
+          "path": "./syntaxes/http.tmLanguage.json"
+        }
+      ]
+    },
     "viewsContainers": {
       "activitybar": [
         {
@@ -31,6 +53,24 @@
         }
       ]
     },
+    "notebookRenderer": [
+      {
+        "id": "opensecure-renderer",
+        "displayName": "HTTP Request Renderer",
+        "entrypoint": "./src/view/notebookRenderer.js"
+      }
+    ],
+    "notebooks": [
+      {
+        "type": "opensecure-notebook",
+        "displayName": "HTTP Request Notebook",
+        "selector": [
+          {
+            "filenamePattern": "*.osreq"
+          }
+        ]
+      }
+    ],
     "commands": [
       {
         "command": "openSecure.refresh",
@@ -45,6 +85,10 @@
         "command": "openSecure.addEndpointNotes",
         "title": "Add Endpoint Notes",
         "icon": "$(note)"
+      },
+      {
+        "command": "openSecure.viewRequestAsNotebook",
+        "title": "View as Notebook"
       }
     ],
     "menus": {

@@ -44,6 +44,7 @@ class MethodItem extends vscode.TreeItem {
 /**
  * Tree item representing an HTTP request
  */
+// Modify the RequestItem class in treeItems.js
 class RequestItem extends vscode.TreeItem {
   constructor(label, data) {
     super(label, vscode.TreeItemCollapsibleState.None);
@@ -67,9 +68,10 @@ class RequestItem extends vscode.TreeItem {
       this.iconPath = new vscode.ThemeIcon('globe');
     }
 
+    // Update to use the notebook command
     this.command = {
-      command: 'openSecure.viewRequest',
-      title: 'View Request',
+      command: 'openSecure.viewRequestAsNotebook',
+      title: 'View as Notebook',
       arguments: [data],
     };
   }
