@@ -1,7 +1,7 @@
 {
   "name": "opensecure",
   "displayName": "OpenSecure",
-  "description": "Security request/response viewer for VS Code",
+  "description": "HTTP request/response viewer for security testing",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.98.0"
@@ -14,21 +14,6 @@
   ],
   "main": "./extension.js",
   "contributes": {
-    "commands": [
-      {
-        "command": "opensecure.ops-test",
-        "title": "ops-test"
-      },
-      {
-        "command": "openSecure.clearRequests",
-        "title": "Clear All Requests",
-        "icon": "$(clear-all)"
-      },
-      {
-        "command": "openSecure.viewRequest",
-        "title": "View Request Details"
-      }
-    ],
     "viewsContainers": {
       "activitybar": [
         {
@@ -41,18 +26,40 @@
     "views": {
       "openSecure": [
         {
-          "id": "openSecureDataView",
-          "name": "HTTP Requests",
-          "icon": "$(globe)"
+          "id": "openSecureRequests",
+          "name": "HTTP Requests"
         }
       ]
     },
+    "commands": [
+      {
+        "command": "openSecure.refresh",
+        "title": "Refresh",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "openSecure.viewRequest",
+        "title": "View Request Details"
+      },
+      {
+        "command": "openSecure.addEndpointNotes",
+        "title": "Add Endpoint Notes",
+        "icon": "$(note)"
+      }
+    ],
     "menus": {
       "view/title": [
         {
-          "command": "openSecure.clearRequests",
-          "when": "view == openSecureDataView",
+          "command": "openSecure.refresh",
+          "when": "view == openSecureRequests",
           "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "openSecure.addEndpointNotes",
+          "when": "view == openSecureRequests && viewItem == endpoint",
+          "group": "inline"
         }
       ]
     }

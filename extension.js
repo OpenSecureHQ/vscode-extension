@@ -1,48 +1,72 @@
 const vscode = require('vscode');
 const { createServer } = require('./server');
-const { initializeActivityBar } = require('./view/activityBar');
-const { RequestDataProvider } = require('./view/primarySideBar');
-
-// Store for request/response data
-let requestDataStore = [];
-let server;
-let requestDataProvider;
+const RequestsProvider = require('./view/requestsProvider');
+const RequestPanel = require('./view/requestsPanel');
+const storage = require('./data/storage');
 
 /**
- * @param {vscode.ExtensionContext} context
+ * Activate the extension
+ * @param {vscode.ExtensionContext} context The extension context
  */
 function activate(context) {
-  console.log('Extension "OpenSecure" activated.');
+  console.log('Extension "OpenSecure" is now active');
 
-  // Initialize the data provider
-  requestDataProvider = new RequestDataProvider(requestDataStore);
+  // Create the tree data provider
+  const requestsProvider = new RequestsProvider();
 
-  // Start the Express server
-  server = createServer(3700, data => {
-    // Callback to receive data from server
-    requestDataStore.push(data);
-    // Notify the view to refresh
-    requestDataProvider.refresh();
+  // Register the tree data provider
+  const treeView = vscode.window.createTreeView('openSecureRequests', {
+    treeDataProvider: requestsProvider,
   });
 
-  // Initialize activity bar and sidebar components
-  initializeActivityBar(context, requestDataStore, requestDataProvider);
+  // Start the server to listen for BURP data
+  const server = createServer(3700, data => storage.addRequest(data));
 
-  // Register commands
+  // Register refresh command
   context.subscriptions.push(
-    vscode.commands.registerCommand('openSecure.clearRequests', () => {
-      requestDataStore = [];
-      requestDataProvider.refresh();
+    vscode.commands.registerCommand('openSecure.refresh', () => {
+      requestsProvider.refresh();
     })
   );
+
+  // Register view request command
+  context.subscriptions.push(
+    vscode.commands.registerCommand('openSecure.viewRequest', data => {
+      RequestPanel.create(data);
+    })
+  );
+
+  // Register command to add endpoint notes
+  context.subscriptions.push(
+    vscode.commands.registerCommand('openSecure.addEndpointNotes', item => {
+      vscode.window
+        .showInputBox({
+          prompt: 'Enter notes for this endpoint',
+          value: storage.getEndpoints()[item.endpoint].notes || '',
+        })
+        .then(input => {
+          if (input !== undefined) {
+            storage.updateEndpointNotes(item.endpoint, input);
+          }
+        });
+    })
+  );
+
+  // Clean up server on deactivation
+  context.subscriptions.push({
+    dispose: () => {
+      if (server) {
+        server.close();
+        console.log('Server stopped');
+      }
+    },
+  });
 }
 
-function deactivate() {
-  if (server) {
-    server.close();
-    console.log('Server stopped.');
-  }
-}
+/**
+ * Deactivate the extension
+ */
+function deactivate() {}
 
 module.exports = {
   activate,

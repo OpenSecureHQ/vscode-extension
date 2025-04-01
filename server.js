@@ -17,9 +17,6 @@ function createServer(port = 3700, dataCallback) {
       const parsed = await parseRequestResponse(rawRequest);
 
       console.log('Received request data');
-      console.log(parsed.request.raw);
-      console.log('\n');
-      console.log(parsed.response.raw);
 
       // Send the data back to the VS Code extension
       if (dataCallback && typeof dataCallback === 'function') {
@@ -39,8 +36,3 @@ function createServer(port = 3700, dataCallback) {
 }
 
 module.exports = { createServer };
-
-// Quick start if run directly
-if (require.main === module) {
-  createServer();
-}
