@@ -1,7 +1,7 @@
 {
   "name": "opensecure",
-  "displayName": "opensecure",
-  "description": "",
+  "displayName": "OpenSecure",
+  "description": "Security request/response viewer for VS Code",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.98.0"
@@ -10,7 +10,7 @@
     "Other"
   ],
   "activationEvents": [
-    "*"
+    "onStartupFinished"
   ],
   "main": "./extension.js",
   "contributes": {
@@ -18,8 +18,44 @@
       {
         "command": "opensecure.ops-test",
         "title": "ops-test"
+      },
+      {
+        "command": "openSecure.clearRequests",
+        "title": "Clear All Requests",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "openSecure.viewRequest",
+        "title": "View Request Details"
       }
-    ]
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "openSecure",
+          "title": "OpenSecure",
+          "icon": "$(shield)"
+        }
+      ]
+    },
+    "views": {
+      "openSecure": [
+        {
+          "id": "openSecureDataView",
+          "name": "HTTP Requests",
+          "icon": "$(globe)"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "openSecure.clearRequests",
+          "when": "view == openSecureDataView",
+          "group": "navigation"
+        }
+      ]
+    }
   },
   "scripts": {
     "lint": "eslint .",

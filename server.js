@@ -1,20 +1,32 @@
 const express = require('express');
 const { parseRequestResponse } = require('./utils/parser');
 
-function createServer(port = 3700) {
+/**
+ * Creates an Express server to handle Burp Suite data
+ * @param {number} port - Port number for the server
+ * @param {Function} dataCallback - Callback to pass parsed data back to the extension
+ * @returns {Object} The Express server instance
+ */
+function createServer(port = 3700, dataCallback) {
   const app = express();
-
   app.use(express.json({ limit: '50mb' }));
 
   app.post('/burp-data', async (req, res) => {
     try {
       const rawRequest = JSON.stringify(req.body);
       const parsed = await parseRequestResponse(rawRequest);
-      // console.log('Parsed Data:', JSON.stringify(parsed, null, 2));
 
+      console.log('Received request data');
       console.log(parsed.request.raw);
       console.log('\n');
       console.log(parsed.response.raw);
+
+      // Send the data back to the VS Code extension
+      if (dataCallback && typeof dataCallback === 'function') {
+        dataCallback(parsed);
+      }
+
+      res.status(200).json({ status: 'success' });
     } catch (error) {
       console.error('Parsing error:', error);
       res.status(400).json({ error: error.message });
