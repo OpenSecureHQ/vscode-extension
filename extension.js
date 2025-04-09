@@ -8,8 +8,25 @@ const storage = require('./data/storage');
  * Activate the extension
  * @param {vscode.ExtensionContext} context The extension context
  */
-function activate(context) {
+async function activate(context) {
   console.log('Extension "OpenSecure" is now active');
+
+  // Initialize storage system
+  await storage.initialize();
+
+  // Create status bar item
+  const statusBarItem = vscode.window.createStatusBarItem(
+    vscode.StatusBarAlignment.Right,
+    100
+  );
+  statusBarItem.text = '$(database) OpenSecure';
+  statusBarItem.tooltip =
+    'OpenSecure: Data stored in workspace/.opensecure/data.json';
+  statusBarItem.show();
+  context.subscriptions.push(statusBarItem);
+
+  // Connect status bar to storage
+  storage.setStatusBarItem(statusBarItem);
 
   // Create the tree data provider
   const requestsProvider = new RequestsProvider();
@@ -37,7 +54,6 @@ function activate(context) {
   );
 
   // Register command to add endpoint notes
-  // In the addEndpointNotes command
   context.subscriptions.push(
     vscode.commands.registerCommand('openSecure.addEndpointNotes', item => {
       vscode.window
@@ -49,6 +65,26 @@ function activate(context) {
         .then(input => {
           if (input !== undefined) {
             storage.updateEndpointNotes(item.host, item.endpoint, input);
+          }
+        });
+    })
+  );
+
+  // Register command to clear all data
+  context.subscriptions.push(
+    vscode.commands.registerCommand('openSecure.clearData', () => {
+      vscode.window
+        .showWarningMessage(
+          'Are you sure you want to clear all captured data?',
+          { modal: true },
+          'Yes',
+          'No'
+        )
+        .then(answer => {
+          if (answer === 'Yes') {
+            storage.clearData();
+            requestsProvider.refresh();
+            vscode.window.showInformationMessage('All data cleared');
           }
         });
     })

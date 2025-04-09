@@ -45,12 +45,22 @@
         "command": "openSecure.addEndpointNotes",
         "title": "Add Endpoint Notes",
         "icon": "$(note)"
+      },
+      {
+        "command": "openSecure.clearData",
+        "title": "Clear All Captured Data",
+        "icon": "$(trash)"
       }
     ],
     "menus": {
       "view/title": [
         {
           "command": "openSecure.refresh",
+          "when": "view == openSecureRequests",
+          "group": "navigation"
+        },
+        {
+          "command": "openSecure.clearData",
           "when": "view == openSecureRequests",
           "group": "navigation"
         }
