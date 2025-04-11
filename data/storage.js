@@ -276,34 +276,46 @@ class Storage {
   // Add this method to the Storage class in storage.js:
 
   /**
-   * Add a code reference to a request
-   * @param {string} host Host name
-   * @param {string} endpoint Endpoint path
-   * @param {string} method HTTP method
-   * @param {number} index Request index
-   * @param {Object} codeRef Code reference {filePath, startLine, endLine, text}
+   * Add a code reference to a specific request
+   * @param {string} host The host
+   * @param {string} endpoint The endpoint
+   * @param {string} method The HTTP method
+   * @param {number} requestIndex The index of the request
+   * @param {Object} codeRef The code reference object
+   * @returns {Object} The updated request data
    */
-  addCodeReference(host, endpoint, method, index, codeRef) {
+  addCodeReference(host, endpoint, method, requestIndex, codeRef) {
     if (
-      this.hosts[host] &&
-      this.hosts[host].endpoints[endpoint] &&
-      this.hosts[host].endpoints[endpoint][method] &&
-      this.hosts[host].endpoints[endpoint][method][index]
+      !this.hosts[host] ||
+      !this.hosts[host].endpoints[endpoint] ||
+      !this.hosts[host].endpoints[endpoint][method]
     ) {
-      // Initialize code references array if it doesn't exist
-      if (!this.hosts[host].endpoints[endpoint][method][index].codeReferences) {
-        this.hosts[host].endpoints[endpoint][method][index].codeReferences = [];
-      }
-
-      // Add the code reference
-      this.hosts[host].endpoints[endpoint][method][index].codeReferences.push(
-        codeRef
-      );
-
-      // Save and notify
-      this.saveData();
-      this.notifyListeners();
+      console.log('Error finding request in storage');
+      return null;
     }
+
+    const request = this.hosts[host].endpoints[endpoint][method][requestIndex];
+    if (!request) {
+      console.log('Error finding request at index');
+      return null;
+    }
+
+    // Initialize codeReferences array if it doesn't exist
+    if (!request.codeReferences) {
+      request.codeReferences = [];
+    }
+
+    // Add the code reference
+    request.codeReferences.push(codeRef);
+
+    // Save the data to disk
+    this.saveData();
+
+    // Notify listeners
+    this.notifyListeners();
+
+    // Return the updated request
+    return request;
   }
 
   /**

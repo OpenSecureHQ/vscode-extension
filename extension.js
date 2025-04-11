@@ -101,8 +101,6 @@ async function activate(context) {
     },
   });
 
-  // Add these commands to the activate function in extension.js:
-
   // Register command to add code reference to a request
   context.subscriptions.push(
     vscode.commands.registerCommand(
@@ -173,6 +171,21 @@ async function activate(context) {
         }
 
         storage.addCodeReference(host, endpoint, method, requestIndex, codeRef);
+
+        // Get the updated data from storage
+        const updatedData =
+          hosts[host].endpoints[endpoint][method][requestIndex];
+
+        // Update any open panels for this request
+        const RequestPanel = require('./view/requestsPanel');
+        RequestPanel.updatePanel(
+          host,
+          endpoint,
+          method,
+          requestIndex,
+          updatedData
+        );
+
         vscode.window.showInformationMessage(
           `Code reference added to ${method} ${endpoint}`
         );

@@ -5,27 +5,14 @@ const storage = require('../data/storage');
  * Create and manage a webview panel for displaying request details
  */
 class RequestPanel {
+  // Track all active panels
+  static activePanels = new Map();
+
   /**
    * Create a new panel
    * @param {Object} data Request/response data to display
    */
   static create(data) {
-    // Create and show panel
-    const panel = vscode.window.createWebviewPanel(
-      'requestDetails',
-      `${data.request.method} ${
-        new URL(data.request.url, `http://${data.request.host}`).pathname
-      }`,
-      vscode.ViewColumn.One,
-      {
-        enableScripts: true,
-        retainContextWhenHidden: true,
-      }
-    );
-
-    // Generate HTML content
-    panel.webview.html = this.generateHtml(data);
-
     // Extract host and endpoint for reference
     const host = data.request.host || 'unknown-host';
     const url = new URL(data.request.url, `http://${host}`);
@@ -46,6 +33,54 @@ class RequestPanel {
     const requestIndex = hosts[host].endpoints[endpoint][method].findIndex(
       req => req.timestamp.getTime() === data.timestamp.getTime()
     );
+
+    if (requestIndex === -1) {
+      console.log('Error finding request in storage');
+      return;
+    }
+
+    // Create a unique ID for this request panel
+    const panelId = `${host}-${endpoint}-${method}-${requestIndex}`;
+
+    // Check if we already have a panel for this request
+    if (this.activePanels.has(panelId)) {
+      // If we do, just show it and refresh its content
+      const existingPanel = this.activePanels.get(panelId);
+      existingPanel.panel.reveal();
+      this.refreshPanel(existingPanel.panel, data);
+      return;
+    }
+
+    // Create and show panel
+    const panel = vscode.window.createWebviewPanel(
+      'requestDetails',
+      `${data.request.method} ${
+        new URL(data.request.url, `http://${data.request.host}`).pathname
+      }`,
+      vscode.ViewColumn.One,
+      {
+        enableScripts: true,
+        retainContextWhenHidden: true,
+      }
+    );
+
+    // Generate HTML content
+    panel.webview.html = this.generateHtml(data);
+
+    // Store the panel info
+    this.activePanels.set(panelId, {
+      panel,
+      host,
+      endpoint,
+      method,
+      requestIndex,
+      data,
+    });
+
+    // Handle panel disposal
+    panel.onDidDispose(() => {
+      this.activePanels.delete(panelId);
+    });
 
     // Handle messages from the webview
     panel.webview.onDidReceiveMessage(
@@ -88,10 +123,10 @@ class RequestPanel {
                 ];
 
               // Update local data reference
-              data = updatedData;
+              this.activePanels.get(panelId).data = updatedData;
 
               // Refresh the panel
-              RequestPanel.refreshPanel(panel, data);
+              this.refreshPanel(panel, updatedData);
             }
             break;
         }
@@ -99,6 +134,24 @@ class RequestPanel {
       undefined,
       []
     );
+  }
+
+  /**
+   * Update a specific panel with new data
+   * @param {string} host The host
+   * @param {string} endpoint The endpoint
+   * @param {string} method The HTTP method
+   * @param {number} requestIndex The request index
+   * @param {Object} updatedData The updated data
+   */
+  static updatePanel(host, endpoint, method, requestIndex, updatedData) {
+    const panelId = `${host}-${endpoint}-${method}-${requestIndex}`;
+
+    if (this.activePanels.has(panelId)) {
+      const panelInfo = this.activePanels.get(panelId);
+      panelInfo.data = updatedData;
+      this.refreshPanel(panelInfo.panel, updatedData);
+    }
   }
 
   /**
