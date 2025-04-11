@@ -80,6 +80,18 @@ class RequestPanel {
                 requestIndex,
                 message.refIndex
               );
+
+              // Get updated data
+              const updatedData =
+                storage.getHosts()[host].endpoints[endpoint][method][
+                  requestIndex
+                ];
+
+              // Update local data reference
+              data = updatedData;
+
+              // Refresh the panel
+              RequestPanel.refreshPanel(panel, data);
             }
             break;
         }
@@ -125,6 +137,15 @@ class RequestPanel {
       </div>
     </div>
   `;
+  }
+
+  /**
+   * Refresh the panel content
+   * @param {vscode.WebviewPanel} panel Panel to refresh
+   * @param {Object} data Updated data
+   */
+  static refreshPanel(panel, data) {
+    panel.webview.html = this.generateHtml(data);
   }
 
   /**
