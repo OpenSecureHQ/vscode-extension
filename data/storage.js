@@ -272,6 +272,67 @@ class Storage {
   setStatusBarItem(item) {
     this.statusBarItem = item;
   }
+
+  // Add this method to the Storage class in storage.js:
+
+  /**
+   * Add a code reference to a request
+   * @param {string} host Host name
+   * @param {string} endpoint Endpoint path
+   * @param {string} method HTTP method
+   * @param {number} index Request index
+   * @param {Object} codeRef Code reference {filePath, startLine, endLine, text}
+   */
+  addCodeReference(host, endpoint, method, index, codeRef) {
+    if (
+      this.hosts[host] &&
+      this.hosts[host].endpoints[endpoint] &&
+      this.hosts[host].endpoints[endpoint][method] &&
+      this.hosts[host].endpoints[endpoint][method][index]
+    ) {
+      // Initialize code references array if it doesn't exist
+      if (!this.hosts[host].endpoints[endpoint][method][index].codeReferences) {
+        this.hosts[host].endpoints[endpoint][method][index].codeReferences = [];
+      }
+
+      // Add the code reference
+      this.hosts[host].endpoints[endpoint][method][index].codeReferences.push(
+        codeRef
+      );
+
+      // Save and notify
+      this.saveData();
+      this.notifyListeners();
+    }
+  }
+
+  /**
+   * Remove a code reference from a request
+   * @param {string} host Host name
+   * @param {string} endpoint Endpoint path
+   * @param {string} method HTTP method
+   * @param {number} index Request index
+   * @param {number} refIndex Code reference index
+   */
+  removeCodeReference(host, endpoint, method, index, refIndex) {
+    if (
+      this.hosts[host] &&
+      this.hosts[host].endpoints[endpoint] &&
+      this.hosts[host].endpoints[endpoint][method] &&
+      this.hosts[host].endpoints[endpoint][method][index] &&
+      this.hosts[host].endpoints[endpoint][method][index].codeReferences
+    ) {
+      // Remove the reference at the specified index
+      this.hosts[host].endpoints[endpoint][method][index].codeReferences.splice(
+        refIndex,
+        1
+      );
+
+      // Save and notify
+      this.saveData();
+      this.notifyListeners();
+    }
+  }
 }
 
 // Create and export a singleton instance

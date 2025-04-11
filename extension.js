@@ -3,6 +3,7 @@ const { createServer } = require('./server');
 const RequestsProvider = require('./view/requestsProvider');
 const RequestPanel = require('./view/requestsPanel');
 const storage = require('./data/storage');
+const path = require('path');
 
 /**
  * Activate the extension
@@ -99,6 +100,126 @@ async function activate(context) {
       }
     },
   });
+
+  // Add these commands to the activate function in extension.js:
+
+  // Register command to add code reference to a request
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      'openSecure.addCodeReference',
+      async requestItem => {
+        // Get active editor
+        const editor = vscode.window.activeTextEditor;
+        if (!editor) {
+          vscode.window.showWarningMessage(
+            'No active editor. Please open a file and select code first.'
+          );
+          return;
+        }
+
+        // Get selected text
+        const selection = editor.selection;
+        if (selection.isEmpty) {
+          vscode.window.showWarningMessage('Please select code to reference.');
+          return;
+        }
+
+        // Get file path, relative to workspace if possible
+        let filePath = editor.document.uri.fsPath;
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        if (workspaceFolders && workspaceFolders.length > 0) {
+          const workspaceFolder = workspaceFolders[0].uri.fsPath;
+          if (filePath.startsWith(workspaceFolder)) {
+            filePath = filePath.substring(workspaceFolder.length);
+            if (filePath.startsWith('/') || filePath.startsWith('\\')) {
+              filePath = filePath.substring(1);
+            }
+          }
+        }
+
+        // Create code reference
+        const codeRef = {
+          filePath: filePath,
+          startLine: selection.start.line,
+          endLine: selection.end.line,
+          text: editor.document.getText(selection),
+        };
+
+        // Add to storage
+        const host = requestItem.data.request.host || 'unknown-host';
+        const url = new URL(requestItem.data.request.url, `http://${host}`);
+        const endpoint = url.pathname;
+        const method = requestItem.data.request.method;
+
+        // Find index in storage
+        const hosts = storage.getHosts();
+        if (
+          !hosts[host] ||
+          !hosts[host].endpoints[endpoint] ||
+          !hosts[host].endpoints[endpoint][method]
+        ) {
+          vscode.window.showErrorMessage('Error finding request in storage');
+          return;
+        }
+
+        const requestIndex = hosts[host].endpoints[endpoint][method].findIndex(
+          req =>
+            req.timestamp.getTime() === requestItem.data.timestamp.getTime()
+        );
+
+        if (requestIndex === -1) {
+          vscode.window.showErrorMessage('Error finding request in storage');
+          return;
+        }
+
+        storage.addCodeReference(host, endpoint, method, requestIndex, codeRef);
+        vscode.window.showInformationMessage(
+          `Code reference added to ${method} ${endpoint}`
+        );
+      }
+    )
+  );
+
+  // Register command to navigate to code reference
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      'openSecure.navigateToCodeReference',
+      async codeRef => {
+        try {
+          // Check if path is relative and resolve against workspace
+          let fullPath = codeRef.filePath;
+          if (!path.isAbsolute(fullPath)) {
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            if (workspaceFolders && workspaceFolders.length > 0) {
+              fullPath = path.join(workspaceFolders[0].uri.fsPath, fullPath);
+            }
+          }
+
+          // Open document
+          const document = await vscode.workspace.openTextDocument(fullPath);
+          const editor = await vscode.window.showTextDocument(document);
+
+          // Select the referenced range
+          const startPos = new vscode.Position(codeRef.startLine, 0);
+          const endPos = new vscode.Position(
+            codeRef.endLine,
+            document.lineAt(codeRef.endLine).text.length
+          );
+          editor.selection = new vscode.Selection(startPos, endPos);
+
+          // Scroll to selection
+          editor.revealRange(
+            new vscode.Range(startPos, endPos),
+            vscode.TextEditorRevealType.InCenter
+          );
+        } catch (error) {
+          vscode.window.showErrorMessage(
+            `Error opening file: ${error.message}`
+          );
+        }
+      }
+    )
+  );
 }
 
 /**

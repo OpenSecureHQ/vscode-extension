@@ -50,6 +50,15 @@
         "command": "openSecure.clearData",
         "title": "Clear All Captured Data",
         "icon": "$(trash)"
+      },
+      {
+        "command": "openSecure.addCodeReference",
+        "title": "Add Code Reference",
+        "icon": "$(link)"
+      },
+      {
+        "command": "openSecure.navigateToCodeReference",
+        "title": "Navigate to Code Reference"
       }
     ],
     "menus": {
@@ -69,6 +78,11 @@
         {
           "command": "openSecure.addEndpointNotes",
           "when": "view == openSecureRequests && viewItem == endpoint",
+          "group": "inline"
+        },
+        {
+          "command": "openSecure.addCodeReference",
+          "when": "view == openSecureRequests && viewItem == request",
           "group": "inline"
         }
       ]

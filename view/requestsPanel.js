@@ -63,11 +63,68 @@ class RequestPanel {
           case 'updateEndpointNotes':
             storage.updateEndpointNotes(host, endpoint, message.text);
             break;
+          case 'navigateToCodeReference':
+            if (data.codeReferences && data.codeReferences[message.refIndex]) {
+              vscode.commands.executeCommand(
+                'openSecure.navigateToCodeReference',
+                data.codeReferences[message.refIndex]
+              );
+            }
+            break;
+          case 'removeCodeReference':
+            if (data.codeReferences && data.codeReferences[message.refIndex]) {
+              storage.removeCodeReference(
+                host,
+                endpoint,
+                method,
+                requestIndex,
+                message.refIndex
+              );
+            }
+            break;
         }
       },
       undefined,
       []
     );
+  }
+
+  /**
+   * Generate HTML for code references
+   * @param {Array} codeReferences Array of code references
+   * @returns {string} HTML content
+   */
+  static generateCodeReferencesHtml(codeReferences) {
+    if (!codeReferences || codeReferences.length === 0) {
+      return '';
+    }
+
+    return `
+    <div class="panel">
+      <div class="panel-header">Code References</div>
+      <div class="panel-content">
+        ${codeReferences
+          .map(
+            (ref, index) => `
+          <div class="code-reference" data-index="${index}">
+            <div class="code-ref-header">
+              <span class="code-ref-file">${this.escapeHtml(
+                ref.filePath
+              )}</span>
+              <span class="code-ref-lines">Lines ${ref.startLine + 1}-${
+              ref.endLine + 1
+            }</span>
+              <button class="code-ref-goto">Go to code</button>
+              <button class="code-ref-delete">Remove</button>
+            </div>
+            <pre class="code-ref-content">${this.escapeHtml(ref.text)}</pre>
+          </div>
+        `
+          )
+          .join('')}
+      </div>
+    </div>
+  `;
   }
 
   /**
@@ -140,6 +197,44 @@ class RequestPanel {
             margin-bottom: 5px;
             color: var(--vscode-terminal-ansiBlue);
         }
+        .code-reference {
+          margin-bottom: 15px;
+          border: 1px solid var(--vscode-panel-border);
+          border-radius: 3px;
+        }
+        .code-ref-header {
+          display: flex;
+          padding: 5px;
+          background-color: var(--vscode-editor-inactiveSelectionBackground);
+          font-size: 0.9em;
+          border-bottom: 1px solid var(--vscode-panel-border);
+        }
+        .code-ref-file {
+          flex-grow: 1;
+          font-weight: bold;
+        }
+        .code-ref-lines {
+          margin-right: 10px;
+          color: var(--vscode-descriptionForeground);
+        }
+        .code-ref-goto, .code-ref-delete {
+          background: none;
+          border: none;
+          color: var(--vscode-button-foreground);
+          background-color: var(--vscode-button-background);
+          border-radius: 3px;
+          padding: 2px 8px;
+          cursor: pointer;
+          margin-left: 5px;
+        }
+        .code-ref-content {
+          max-height: 150px;
+          overflow: auto;
+          margin: 0;
+          padding: 8px;
+          background-color: var(--vscode-textCodeBlock-background);
+          border-radius: 0 0 3px 3px;
+        }
     </style>
 </head>
 <body>
@@ -152,6 +247,11 @@ class RequestPanel {
                   endpointNotes
                 )}</textarea>
             </div>
+            ${
+              data.codeReferences
+                ? this.generateCodeReferencesHtml(data.codeReferences)
+                : ''
+            }
         </div>
         
         <div class="panel">
@@ -224,6 +324,27 @@ class RequestPanel {
                 text: e.target.value
             });
         });
+
+        document.querySelectorAll('.code-ref-goto').forEach((button, index) => {
+        button.addEventListener('click', () => {
+          const refIndex = button.closest('.code-reference').dataset.index;
+          vscode.postMessage({
+            command: 'navigateToCodeReference',
+            refIndex: parseInt(refIndex, 10)
+          });
+        });
+      });
+
+      // Handle code reference deletion
+      document.querySelectorAll('.code-ref-delete').forEach((button, index) => {
+        button.addEventListener('click', () => {
+          const refIndex = button.closest('.code-reference').dataset.index;
+          vscode.postMessage({
+            command: 'removeCodeReference',
+            refIndex: parseInt(refIndex, 10)
+          });
+        });
+      });
     </script>
 </body>
 </html>`;
