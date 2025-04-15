@@ -102,6 +102,7 @@ async function activate(context) {
   });
 
   // Register command to add code reference to a request
+  // Register command to add code reference to a request
   context.subscriptions.push(
     vscode.commands.registerCommand(
       'openSecure.addCodeReference',
@@ -135,12 +136,46 @@ async function activate(context) {
           }
         }
 
+        // Calculate a checksum of the selected code for future validation
+        const checksum = calculateChecksum(editor.document.getText(selection));
+
+        // Try to get Git information if possible
+        let gitInfo = null;
+        try {
+          // Check if the Git extension is available
+          const gitExtension =
+            vscode.extensions.getExtension('vscode.git')?.exports;
+          if (gitExtension) {
+            const api = gitExtension.getAPI(1);
+
+            // Try to find the repository for this file
+            const repository = api.repositories.find(repo =>
+              editor.document.uri.fsPath.startsWith(repo.rootUri.fsPath)
+            );
+
+            if (repository && repository.state && repository.state.HEAD) {
+              gitInfo = {
+                branch: repository.state.HEAD.name || 'unknown',
+                commitHash: repository.state.HEAD.commit || 'unknown',
+                repositoryRoot: repository.rootUri.fsPath,
+              };
+            }
+          }
+        } catch (error) {
+          console.log('Could not get Git information:', error);
+          // Continue without Git info
+        }
+
         // Create code reference
         const codeRef = {
           filePath: filePath,
           startLine: selection.start.line,
           endLine: selection.end.line,
           text: editor.document.getText(selection),
+          createdAt: new Date().toISOString(),
+          checksum: checksum,
+          isValid: true,
+          gitInfo: gitInfo,
         };
 
         // Add to storage
@@ -186,9 +221,19 @@ async function activate(context) {
           updatedData
         );
 
-        vscode.window.showInformationMessage(
-          `Code reference added to ${method} ${endpoint}`
-        );
+        // Show appropriate message
+        if (gitInfo) {
+          vscode.window.showInformationMessage(
+            `Code reference added to ${method} ${endpoint} from commit ${gitInfo.commitHash.substring(
+              0,
+              7
+            )}`
+          );
+        } else {
+          vscode.window.showInformationMessage(
+            `Code reference added to ${method} ${endpoint}`
+          );
+        }
       }
     )
   );
@@ -208,9 +253,34 @@ async function activate(context) {
             }
           }
 
+          // Check if file exists
+          try {
+            await vscode.workspace.fs.stat(vscode.Uri.file(fullPath));
+          } catch (error) {
+            // File doesn't exist anymore
+            vscode.window.showWarningMessage(
+              `The file "${codeRef.filePath}" no longer exists.`
+            );
+            return;
+          }
+
           // Open document
           const document = await vscode.workspace.openTextDocument(fullPath);
           const editor = await vscode.window.showTextDocument(document);
+
+          // Check if line range is still valid
+          if (
+            codeRef.startLine >= document.lineCount ||
+            codeRef.endLine >= document.lineCount
+          ) {
+            vscode.window.showWarningMessage(
+              'The referenced code lines no longer exist in the file.'
+            );
+
+            // Mark as invalid
+            codeRef.isValid = false;
+            return;
+          }
 
           // Select the referenced range
           const startPos = new vscode.Position(codeRef.startLine, 0);
@@ -225,6 +295,19 @@ async function activate(context) {
             new vscode.Range(startPos, endPos),
             vscode.TextEditorRevealType.InCenter
           );
+
+          // Validate if the code still matches
+          const currentText = document.getText(
+            new vscode.Range(startPos, endPos)
+          );
+          const currentChecksum = calculateChecksum(currentText);
+
+          if (currentChecksum !== codeRef.checksum) {
+            // Code has changed
+            vscode.window.showWarningMessage(
+              '⚠️ Warning: The code at this location has changed since it was referenced.'
+            );
+          }
         } catch (error) {
           vscode.window.showErrorMessage(
             `Error opening file: ${error.message}`
@@ -233,6 +316,215 @@ async function activate(context) {
       }
     )
   );
+
+  // Register command to validate code reference
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      'openSecure.validateCodeReference',
+      async (host, endpoint, method, requestIndex, refIndex, codeRef) => {
+        try {
+          // Check if path is relative and resolve against workspace
+          let fullPath = codeRef.filePath;
+          if (!path.isAbsolute(fullPath)) {
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            if (workspaceFolders && workspaceFolders.length > 0) {
+              fullPath = path.join(workspaceFolders[0].uri.fsPath, fullPath);
+            }
+          }
+
+          // Check if file exists
+          try {
+            await vscode.workspace.fs.stat(vscode.Uri.file(fullPath));
+          } catch (error) {
+            // File doesn't exist
+            markReferenceAsInvalid(
+              host,
+              endpoint,
+              method,
+              requestIndex,
+              refIndex,
+              'File no longer exists'
+            );
+            return;
+          }
+
+          // Open document to check content
+          const document = await vscode.workspace.openTextDocument(fullPath);
+
+          // Check if line range is still valid
+          if (
+            codeRef.startLine >= document.lineCount ||
+            codeRef.endLine >= document.lineCount
+          ) {
+            markReferenceAsInvalid(
+              host,
+              endpoint,
+              method,
+              requestIndex,
+              refIndex,
+              'Referenced lines no longer exist'
+            );
+            return;
+          }
+
+          // Get the current text at those line positions
+          const startPos = new vscode.Position(codeRef.startLine, 0);
+          const endPos = new vscode.Position(
+            codeRef.endLine,
+            document.lineAt(codeRef.endLine).text.length
+          );
+          const currentText = document.getText(
+            new vscode.Range(startPos, endPos)
+          );
+
+          // Calculate checksum
+          const currentChecksum = calculateChecksum(currentText);
+
+          // Compare with stored checksum
+          if (currentChecksum !== codeRef.checksum) {
+            // Code has changed
+            markReferenceAsInvalid(
+              host,
+              endpoint,
+              method,
+              requestIndex,
+              refIndex,
+              'Code has been modified'
+            );
+            return;
+          }
+
+          // If we get here, the reference is still valid
+          markReferenceAsValid(host, endpoint, method, requestIndex, refIndex);
+          vscode.window.showInformationMessage(
+            'Code reference is valid and up-to-date'
+          );
+        } catch (error) {
+          vscode.window.showErrorMessage(
+            `Error validating code reference: ${error.message}`
+          );
+        }
+      }
+    )
+  );
+
+  /**
+   * Calculate a simple checksum for a string
+   * @param {string} text The text to checksum
+   * @returns {string} A hex string checksum
+   */
+  function calculateChecksum(text) {
+    let hash = 0;
+    if (text.length === 0) return hash.toString(16);
+
+    for (let i = 0; i < text.length; i++) {
+      const char = text.charCodeAt(i);
+      hash = (hash << 5) - hash + char;
+      hash = hash & hash; // Convert to 32bit integer
+    }
+
+    return hash.toString(16);
+  }
+
+  /**
+   * Mark a code reference as invalid
+   * @param {string} host The host
+   * @param {string} endpoint The endpoint
+   * @param {string} method The HTTP method
+   * @param {number} requestIndex The request index
+   * @param {number} refIndex The code reference index
+   * @param {string} reason The reason why it's invalid
+   */
+  function markReferenceAsInvalid(
+    host,
+    endpoint,
+    method,
+    requestIndex,
+    refIndex,
+    reason
+  ) {
+    const hosts = storage.getHosts();
+    if (
+      !hosts[host] ||
+      !hosts[host].endpoints[endpoint] ||
+      !hosts[host].endpoints[endpoint][method] ||
+      !hosts[host].endpoints[endpoint][method][requestIndex] ||
+      !hosts[host].endpoints[endpoint][method][requestIndex].codeReferences ||
+      !hosts[host].endpoints[endpoint][method][requestIndex].codeReferences[
+        refIndex
+      ]
+    ) {
+      vscode.window.showErrorMessage('Error finding code reference in storage');
+      return;
+    }
+
+    // Mark as invalid
+    const codeRef =
+      hosts[host].endpoints[endpoint][method][requestIndex].codeReferences[
+        refIndex
+      ];
+    codeRef.isValid = false;
+    codeRef.invalidReason = reason;
+    codeRef.validatedAt = new Date().toISOString();
+
+    // Save changes
+    storage.saveData();
+
+    // Update any open panels
+    const updatedData = hosts[host].endpoints[endpoint][method][requestIndex];
+    const RequestPanel = require('./view/requestsPanel');
+    RequestPanel.updatePanel(host, endpoint, method, requestIndex, updatedData);
+
+    vscode.window.showWarningMessage(`Code reference is invalid: ${reason}`);
+  }
+
+  /**
+   * Mark a code reference as valid
+   * @param {string} host The host
+   * @param {string} endpoint The endpoint
+   * @param {string} method The HTTP method
+   * @param {number} requestIndex The request index
+   * @param {number} refIndex The code reference index
+   */
+  function markReferenceAsValid(
+    host,
+    endpoint,
+    method,
+    requestIndex,
+    refIndex
+  ) {
+    const hosts = storage.getHosts();
+    if (
+      !hosts[host] ||
+      !hosts[host].endpoints[endpoint] ||
+      !hosts[host].endpoints[endpoint][method] ||
+      !hosts[host].endpoints[endpoint][method][requestIndex] ||
+      !hosts[host].endpoints[endpoint][method][requestIndex].codeReferences ||
+      !hosts[host].endpoints[endpoint][method][requestIndex].codeReferences[
+        refIndex
+      ]
+    ) {
+      vscode.window.showErrorMessage('Error finding code reference in storage');
+      return;
+    }
+
+    // Mark as valid
+    const codeRef =
+      hosts[host].endpoints[endpoint][method][requestIndex].codeReferences[
+        refIndex
+      ];
+    codeRef.isValid = true;
+    codeRef.invalidReason = null;
+    codeRef.validatedAt = new Date().toISOString();
+
+    // Save changes
+    storage.saveData();
+
+    // Update any open panels
+    const updatedData = hosts[host].endpoints[endpoint][method][requestIndex];
+    const RequestPanel = require('./view/requestsPanel');
+    RequestPanel.updatePanel(host, endpoint, method, requestIndex, updatedData);
+  }
 }
 
 /**

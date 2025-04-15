@@ -106,6 +106,19 @@ class RequestPanel {
               );
             }
             break;
+          case 'validateCodeReference':
+            if (data.codeReferences && data.codeReferences[message.refIndex]) {
+              vscode.commands.executeCommand(
+                'openSecure.validateCodeReference',
+                host,
+                endpoint,
+                method,
+                requestIndex,
+                message.refIndex,
+                data.codeReferences[message.refIndex]
+              );
+            }
+            break;
           case 'removeCodeReference':
             if (data.codeReferences && data.codeReferences[message.refIndex]) {
               storage.removeCodeReference(
@@ -169,9 +182,33 @@ class RequestPanel {
       <div class="panel-header">Code References</div>
       <div class="panel-content">
         ${codeReferences
-          .map(
-            (ref, index) => `
-          <div class="code-reference" data-index="${index}">
+          .map((ref, index) => {
+            // Format the creation date if available
+            const creationDate = ref.createdAt
+              ? new Date(ref.createdAt).toLocaleString()
+              : 'Unknown date';
+
+            // Determine if we should show any validity indicators
+            const validityClass =
+              ref.isValid === false ? 'code-ref-invalid' : '';
+            const warningIcon = ref.isValid === false ? '⚠️ ' : '';
+
+            // Git information display
+            const gitInfo = ref.gitInfo
+              ? `
+                  <div class="code-ref-git">
+                    <span class="code-ref-commit" title="${
+                      ref.gitInfo.commitHash
+                    }">Commit: ${ref.gitInfo.commitHash.substring(0, 7)}</span>
+                    <span class="code-ref-branch">Branch: ${
+                      ref.gitInfo.branch
+                    }</span>
+                  </div>
+                `
+              : '';
+
+            return `
+          <div class="code-reference ${validityClass}" data-index="${index}">
             <div class="code-ref-header">
               <span class="code-ref-file">${this.escapeHtml(
                 ref.filePath
@@ -179,13 +216,28 @@ class RequestPanel {
               <span class="code-ref-lines">Lines ${ref.startLine + 1}-${
               ref.endLine + 1
             }</span>
+              <span class="code-ref-date" title="Created on ${creationDate}">Added: ${creationDate}</span>
+            </div>
+            ${gitInfo}
+            <div class="code-ref-actions">
               <button class="code-ref-goto">Go to code</button>
+              <button class="code-ref-validate">Validate</button>
               <button class="code-ref-delete">Remove</button>
             </div>
-            <pre class="code-ref-content">${this.escapeHtml(ref.text)}</pre>
+            <pre class="code-ref-content">${warningIcon}${this.escapeHtml(
+              ref.text
+            )}</pre>
+            ${
+              ref.isValid === false
+                ? `<div class="code-ref-warning">This code reference is invalid: ${
+                    ref.invalidReason ||
+                    'The code may have been modified or deleted.'
+                  }</div>`
+                : ''
+            }
           </div>
-        `
-          )
+        `;
+          })
           .join('')}
       </div>
     </div>
@@ -309,6 +361,46 @@ class RequestPanel {
           background-color: var(--vscode-textCodeBlock-background);
           border-radius: 0 0 3px 3px;
         }
+        .code-ref-date {
+          margin-right: 10px;
+          font-size: 0.85em;
+          color: var(--vscode-descriptionForeground);
+        }
+        .code-ref-invalid {
+          border-left: 3px solid var(--vscode-editorError-foreground);
+        }
+        .code-ref-warning {
+          padding: 5px 8px;
+          background-color: var(--vscode-inputValidation-errorBackground);
+          color: var(--vscode-inputValidation-errorForeground);
+          border: 1px solid var(--vscode-inputValidation-errorBorder);
+          font-size: 0.9em;
+          margin-top: 0;
+          border-radius: 0 0 3px 3px;
+        }
+        .code-ref-git {
+          padding: 4px 8px;
+          background-color: var(--vscode-editor-lineHighlightBackground);
+          font-size: 0.85em;
+          display: flex;
+          flex-wrap: wrap;
+          gap: 10px;
+          border-bottom: 1px solid var(--vscode-panel-border);
+        }
+        .code-ref-commit {
+          font-family: var(--vscode-editor-font-family);
+          color: var(--vscode-gitDecoration-addedResourceForeground);
+        }
+        .code-ref-branch {
+          color: var(--vscode-gitDecoration-modifiedResourceForeground);
+        }
+        .code-ref-actions {
+          display: flex;
+          justify-content: flex-end;
+          padding: 4px 8px;
+          background-color: var(--vscode-editor-inactiveSelectionBackground);
+          border-bottom: 1px solid var(--vscode-panel-border);
+        }
     </style>
 </head>
 <body>
@@ -404,6 +496,17 @@ class RequestPanel {
           const refIndex = button.closest('.code-reference').dataset.index;
           vscode.postMessage({
             command: 'navigateToCodeReference',
+            refIndex: parseInt(refIndex, 10)
+          });
+        });
+      });
+
+      // Handle code reference validation
+      document.querySelectorAll('.code-ref-validate').forEach((button, index) => {
+        button.addEventListener('click', () => {
+          const refIndex = button.closest('.code-reference').dataset.index;
+          vscode.postMessage({
+            command: 'validateCodeReference',
             refIndex: parseInt(refIndex, 10)
           });
         });
