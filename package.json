@@ -1,5 +1,5 @@
 {
-  "name": "opensecure",
+  "name": "opensecure-req-code-reference",
   "displayName": "OpenSecure",
   "description": "HTTP request/response viewer for security testing",
   "version": "0.0.1",
