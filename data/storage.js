@@ -38,29 +38,44 @@ class Storage {
     this.dataFile = path.join(this.storagePath, 'data.json');
 
     try {
+      // Check if directory and file exist
+      if (fs.existsSync(this.storagePath) && fs.existsSync(this.dataFile)) {
+        await this.loadData();
+        this.initialized = true;
+      } else {
+        this.initialized = false;
+      }
+    } catch (error) {
+      console.error('Error checking storage:', error);
+      this.initialized = false;
+    }
+  }
+
+  /**
+   * Create storage directory and file
+   */
+  async createStorage() {
+    try {
       // Check if directory exists, if not create it
       if (!fs.existsSync(this.storagePath)) {
         fs.mkdirSync(this.storagePath);
         console.log(`Created directory: ${this.storagePath}`);
-
-        // Show notification that storage was initialized
-        vscode.window.showInformationMessage('OpenSecure storage initialized');
       }
 
-      // Check if data file exists, if so load it
-      if (fs.existsSync(this.dataFile)) {
-        await this.loadData();
-      } else {
-        // Create empty data file
-        this.saveData();
-      }
+      // Create empty data file
+      this.saveData();
+
+      // Show notification that storage was initialized
+      vscode.window.showInformationMessage('OpenSecure storage initialized');
 
       this.initialized = true;
+      return true;
     } catch (error) {
-      console.error('Error initializing storage:', error);
+      console.error('Error creating storage:', error);
       vscode.window.showErrorMessage(
-        `Failed to initialize storage: ${error.message}`
+        `Failed to create storage: ${error.message}`
       );
+      return false;
     }
   }
 

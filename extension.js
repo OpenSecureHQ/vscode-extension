@@ -20,9 +20,18 @@ async function activate(context) {
     vscode.StatusBarAlignment.Right,
     100
   );
-  statusBarItem.text = '$(database) OpenSecure';
-  statusBarItem.tooltip =
-    'OpenSecure: Data stored in workspace/.opensecure/data.json';
+
+  // Update status bar based on storage state
+  if (storage.initialized) {
+    statusBarItem.text = '$(database) OpenSecure';
+    statusBarItem.tooltip =
+      'OpenSecure: Data stored in workspace/.opensecure/data.json';
+  } else {
+    statusBarItem.text = '$(database) OpenSecure $(warning)';
+    statusBarItem.tooltip =
+      'OpenSecure: Storage not initialized. Click to create storage.';
+    statusBarItem.command = 'openSecure.createStorage';
+  }
   statusBarItem.show();
   context.subscriptions.push(statusBarItem);
 
@@ -38,7 +47,36 @@ async function activate(context) {
   });
 
   // Start the server to listen for BURP data
-  const server = createServer(3700, data => storage.addRequest(data));
+  const server = createServer(3700, data => {
+    if (storage.initialized) {
+      storage.addRequest(data);
+    } else {
+      vscode.window
+        .showWarningMessage(
+          'OpenSecure storage not initialized. Please create storage first.',
+          'Create Storage'
+        )
+        .then(selection => {
+          if (selection === 'Create Storage') {
+            vscode.commands.executeCommand('openSecure.createStorage');
+          }
+        });
+    }
+  });
+
+  // Register create storage command
+  context.subscriptions.push(
+    vscode.commands.registerCommand('openSecure.createStorage', async () => {
+      const success = await storage.createStorage();
+      if (success) {
+        statusBarItem.text = '$(database) OpenSecure';
+        statusBarItem.tooltip =
+          'OpenSecure: Data stored in workspace/.opensecure/data.json';
+        statusBarItem.command = undefined;
+        requestsProvider.refresh();
+      }
+    })
+  );
 
   // Register refresh command
   context.subscriptions.push(

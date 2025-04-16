@@ -33,6 +33,11 @@
     },
     "commands": [
       {
+        "command": "openSecure.createStorage",
+        "title": "Create OpenSecure Storage",
+        "icon": "$(database)"
+      },
+      {
         "command": "openSecure.refresh",
         "title": "Refresh",
         "icon": "$(refresh)"
