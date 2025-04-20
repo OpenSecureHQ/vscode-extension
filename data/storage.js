@@ -253,8 +253,8 @@ class Storage {
   }
 
   /**
-   * Add a new request
-   * @param {Object} data Request/response data
+   * Add a new request to storage
+   * @param {Object} data Request data to store
    */
   addRequest(data) {
     const host = data.request.host || 'unknown-host';
@@ -282,6 +282,18 @@ class Storage {
 
     // Add empty notes object
     data.notes = { content: '' };
+
+    // Add custom name if provided
+    if (data.request.body) {
+      try {
+        const body = JSON.parse(data.request.body);
+        if (body.operationName) {
+          data.customName = body.operationName;
+        }
+      } catch (e) {
+        // Not a JSON body or no operationName, ignore
+      }
+    }
 
     // Add to storage
     this.hosts[host].endpoints[endpoint][method].push(data);
@@ -347,8 +359,6 @@ class Storage {
   setStatusBarItem(item) {
     this.statusBarItem = item;
   }
-
-  // Add this method to the Storage class in storage.js:
 
   /**
    * Add a code reference to a specific request
@@ -417,6 +427,32 @@ class Storage {
 
       // Save and notify
       this.saveData();
+      this.notifyListeners();
+    }
+  }
+
+  /**
+   * Rename a request with a custom name
+   * @param {string} host Host name
+   * @param {string} endpoint Endpoint path
+   * @param {string} method HTTP method
+   * @param {number} index Request index
+   * @param {string} newName New name for the request
+   */
+  renameRequest(host, endpoint, method, index, newName) {
+    if (
+      this.hosts[host] &&
+      this.hosts[host].endpoints[endpoint] &&
+      this.hosts[host].endpoints[endpoint][method] &&
+      this.hosts[host].endpoints[endpoint][method][index]
+    ) {
+      // Set the custom name
+      this.hosts[host].endpoints[endpoint][method][index].customName = newName;
+
+      // Save the changes
+      this.saveData();
+
+      // Notify listeners
       this.notifyListeners();
     }
   }

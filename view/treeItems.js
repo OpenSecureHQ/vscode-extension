@@ -61,7 +61,9 @@ class MethodItem extends vscode.TreeItem {
  */
 class RequestItem extends vscode.TreeItem {
   constructor(label, data, index) {
-    super(label, vscode.TreeItemCollapsibleState.None);
+    // Use custom name if available, otherwise use timestamp
+    const displayLabel = data.customName || data.timestamp.toLocaleTimeString();
+    super(displayLabel, vscode.TreeItemCollapsibleState.None);
     this.data = data;
     this.index = index;
     this.contextValue = 'request';

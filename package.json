@@ -64,6 +64,11 @@
         "command": "openSecure.chooseStorageLocation",
         "title": "Choose Storage Location",
         "icon": "$(folder)"
+      },
+      {
+        "command": "openSecure.renameRequest",
+        "title": "Rename Request",
+        "icon": "$(edit)"
       }
     ],
     "menus": {
@@ -87,6 +92,11 @@
       "view/item/context": [
         {
           "command": "openSecure.addCodeReference",
+          "when": "view == openSecureRequests && viewItem == request",
+          "group": "inline"
+        },
+        {
+          "command": "openSecure.renameRequest",
           "when": "view == openSecureRequests && viewItem == request",
           "group": "inline"
         }

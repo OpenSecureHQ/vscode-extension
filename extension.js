@@ -176,6 +176,49 @@ async function activate(context) {
     })
   );
 
+  // Register rename request command
+  let renameRequestDisposable = vscode.commands.registerCommand(
+    'openSecure.renameRequest',
+    async item => {
+      if (!item || !item.data) {
+        return;
+      }
+
+      // Get the current name or use empty string
+      const currentName = item.data.customName || '';
+
+      // Show input box to get new name
+      const newName = await vscode.window.showInputBox({
+        prompt: 'Enter a new name for this request',
+        value: currentName,
+        placeHolder: 'Request name',
+      });
+
+      // If user cancelled or entered empty name, do nothing
+      if (newName === undefined || newName === '') {
+        return;
+      }
+
+      try {
+        // Get the request details from the item
+        const host = item.data.request.host;
+        const url = new URL(item.data.request.url, `http://${host}`);
+        const endpoint = url.pathname;
+        const method = item.data.request.method;
+
+        // Rename the request
+        storage.renameRequest(host, endpoint, method, item.index, newName);
+
+        // Show success message
+        vscode.window.showInformationMessage(`Request renamed to "${newName}"`);
+      } catch (error) {
+        vscode.window.showErrorMessage(
+          `Failed to rename request: ${error.message}`
+        );
+      }
+    }
+  );
+
   // Clean up server on deactivation
   context.subscriptions.push({
     dispose: () => {
@@ -610,6 +653,8 @@ async function activate(context) {
     const RequestPanel = require('./view/requestsPanel');
     RequestPanel.updatePanel(host, endpoint, method, requestIndex, updatedData);
   }
+
+  context.subscriptions.push(renameRequestDisposable);
 }
 
 /**
