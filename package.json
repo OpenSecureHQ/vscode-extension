@@ -47,11 +47,6 @@
         "title": "View Request Details"
       },
       {
-        "command": "openSecure.addEndpointNotes",
-        "title": "Add Endpoint Notes",
-        "icon": "$(note)"
-      },
-      {
         "command": "openSecure.clearData",
         "title": "Clear All Captured Data",
         "icon": "$(trash)"
@@ -64,6 +59,11 @@
       {
         "command": "openSecure.navigateToCodeReference",
         "title": "Navigate to Code Reference"
+      },
+      {
+        "command": "openSecure.chooseStorageLocation",
+        "title": "Choose Storage Location",
+        "icon": "$(folder)"
       }
     ],
     "menus": {
@@ -77,20 +77,37 @@
           "command": "openSecure.clearData",
           "when": "view == openSecureRequests",
           "group": "navigation"
+        },
+        {
+          "command": "openSecure.chooseStorageLocation",
+          "when": "view == openSecureRequests",
+          "group": "navigation"
         }
       ],
       "view/item/context": [
-        {
-          "command": "openSecure.addEndpointNotes",
-          "when": "view == openSecureRequests && viewItem == endpoint",
-          "group": "inline"
-        },
         {
           "command": "openSecure.addCodeReference",
           "when": "view == openSecureRequests && viewItem == request",
           "group": "inline"
         }
       ]
+    },
+    "configuration": {
+      "title": "OpenSecure",
+      "properties": {
+        "opensecure.storageLocation": {
+          "type": "string",
+          "default": "${workspaceFolder}/.opensecure",
+          "description": "Location where OpenSecure will store its data. Can be an absolute path or use variables like ${workspaceFolder}",
+          "scope": "resource"
+        },
+        "opensecure.useWorkspaceStorage": {
+          "type": "boolean",
+          "default": true,
+          "description": "If true, stores data in workspace folder. If false, uses global storage location.",
+          "scope": "resource"
+        }
+      }
     }
   },
   "scripts": {

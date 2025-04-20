@@ -13,6 +13,52 @@ class Storage {
     this.changeListeners = [];
     this.initialized = false;
     this.statusBarItem = null;
+    this.configChangeDisposable = null;
+  }
+
+  /**
+   * Get the storage path from configuration
+   * @returns {string} The configured storage path
+   */
+  getStoragePath() {
+    const config = vscode.workspace.getConfiguration('opensecure');
+    const useWorkspaceStorage = config.get('useWorkspaceStorage', true);
+    let storageLocation = config.get(
+      'storageLocation',
+      '${workspaceFolder}/.opensecure'
+    );
+
+    // Replace variables in the path
+    if (storageLocation.includes('${workspaceFolder}')) {
+      const workspaceFolders = vscode.workspace.workspaceFolders;
+      if (!workspaceFolders || workspaceFolders.length === 0) {
+        throw new Error('No workspace folder available for storage');
+      }
+      storageLocation = storageLocation.replace(
+        '${workspaceFolder}',
+        workspaceFolders[0].uri.fsPath
+      );
+    }
+
+    // If not using workspace storage, use the specified location
+    if (!useWorkspaceStorage) {
+      return storageLocation;
+    }
+
+    // For workspace storage, ensure the path is within the workspace
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (!workspaceFolders || workspaceFolders.length === 0) {
+      throw new Error('No workspace folder available for storage');
+    }
+
+    const workspacePath = workspaceFolders[0].uri.fsPath;
+    if (
+      !path.resolve(storageLocation).startsWith(path.resolve(workspacePath))
+    ) {
+      throw new Error('Storage location must be within the workspace folder');
+    }
+
+    return storageLocation;
   }
 
   /**
@@ -21,23 +67,11 @@ class Storage {
   async initialize() {
     if (this.initialized) return;
 
-    // Get the workspace folder path
-    const workspaceFolders = vscode.workspace.workspaceFolders;
-    if (!workspaceFolders || workspaceFolders.length === 0) {
-      // Fallback to user home directory if no workspace is open
-      const homeDir = process.env.HOME || process.env.USERPROFILE;
-      this.storagePath = path.join(homeDir, '.opensecure');
-    } else {
-      // Use the first workspace folder
-      this.storagePath = path.join(
-        workspaceFolders[0].uri.fsPath,
-        '.opensecure'
-      );
-    }
-
-    this.dataFile = path.join(this.storagePath, 'data.json');
-
     try {
+      // Get storage path from configuration
+      this.storagePath = this.getStoragePath();
+      this.dataFile = path.join(this.storagePath, 'data.json');
+
       // Check if directory and file exist
       if (fs.existsSync(this.storagePath) && fs.existsSync(this.dataFile)) {
         await this.loadData();
@@ -45,9 +79,43 @@ class Storage {
       } else {
         this.initialized = false;
       }
+
+      // Listen for configuration changes
+      this.configChangeDisposable = vscode.workspace.onDidChangeConfiguration(
+        e => {
+          if (e.affectsConfiguration('opensecure')) {
+            this.handleConfigChange();
+          }
+        }
+      );
     } catch (error) {
       console.error('Error checking storage:', error);
       this.initialized = false;
+    }
+  }
+
+  /**
+   * Handle configuration changes
+   */
+  async handleConfigChange() {
+    const oldPath = this.storagePath;
+    const oldFile = this.dataFile;
+
+    try {
+      // Get new storage path
+      this.storagePath = this.getStoragePath();
+      this.dataFile = path.join(this.storagePath, 'data.json');
+
+      // If path changed, we need to reinitialize
+      if (oldPath !== this.storagePath) {
+        this.initialized = false;
+        await this.initialize();
+      }
+    } catch (error) {
+      console.error('Error handling config change:', error);
+      // Revert to old path if new one is invalid
+      this.storagePath = oldPath;
+      this.dataFile = oldFile;
     }
   }
 
@@ -56,9 +124,13 @@ class Storage {
    */
   async createStorage() {
     try {
+      // Get storage path from configuration
+      this.storagePath = this.getStoragePath();
+      this.dataFile = path.join(this.storagePath, 'data.json');
+
       // Check if directory exists, if not create it
       if (!fs.existsSync(this.storagePath)) {
-        fs.mkdirSync(this.storagePath);
+        fs.mkdirSync(this.storagePath, { recursive: true });
         console.log(`Created directory: ${this.storagePath}`);
       }
 
@@ -66,7 +138,9 @@ class Storage {
       this.saveData();
 
       // Show notification that storage was initialized
-      vscode.window.showInformationMessage('OpenSecure storage initialized');
+      vscode.window.showInformationMessage(
+        `OpenSecure storage initialized at ${this.storagePath}`
+      );
 
       this.initialized = true;
       return true;
@@ -195,7 +269,7 @@ class Storage {
 
     // Initialize endpoint if it doesn't exist
     if (!this.hosts[host].endpoints[endpoint]) {
-      this.hosts[host].endpoints[endpoint] = { notes: '' };
+      this.hosts[host].endpoints[endpoint] = {};
     }
 
     // Initialize method if it doesn't exist
@@ -207,7 +281,7 @@ class Storage {
     data.timestamp = new Date();
 
     // Add empty notes object
-    data.notes = { request: '' };
+    data.notes = { content: '' };
 
     // Add to storage
     this.hosts[host].endpoints[endpoint][method].push(data);
@@ -234,21 +308,7 @@ class Storage {
       this.hosts[host].endpoints[endpoint][method] &&
       this.hosts[host].endpoints[endpoint][method][index]
     ) {
-      this.hosts[host].endpoints[endpoint][method][index].notes.request = notes;
-      this.saveData();
-      this.notifyListeners();
-    }
-  }
-
-  /**
-   * Update notes for an endpoint
-   * @param {string} host Host name
-   * @param {string} endpoint Endpoint path
-   * @param {string} notes Notes content
-   */
-  updateEndpointNotes(host, endpoint, notes) {
-    if (this.hosts[host] && this.hosts[host].endpoints[endpoint]) {
-      this.hosts[host].endpoints[endpoint].notes = notes;
+      this.hosts[host].endpoints[endpoint][method][index].notes.content = notes;
       this.saveData();
       this.notifyListeners();
     }

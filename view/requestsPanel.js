@@ -95,9 +95,6 @@ class RequestPanel {
               message.text
             );
             break;
-          case 'updateEndpointNotes':
-            storage.updateEndpointNotes(host, endpoint, message.text);
-            break;
           case 'navigateToCodeReference':
             if (data.codeReferences && data.codeReferences[message.refIndex]) {
               vscode.commands.executeCommand(
@@ -277,307 +274,387 @@ class RequestPanel {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Request Details</title>
     <style>
-        body { 
-            font-family: var(--vscode-font-family); 
-            padding: 10px;
+        body {
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            margin: 0;
+            padding: 0;
             background-color: var(--vscode-editor-background);
             color: var(--vscode-editor-foreground);
         }
-        .container { display: flex; flex-direction: column; height: 100vh; }
-        .panel { margin-bottom: 20px; }
-        .panel-header { 
-            background-color: var(--vscode-titleBar-activeBackground);
+        .container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+        .split-view {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+        .request-panel, .response-panel {
+            flex: 1;
+            overflow: auto;
+            padding: 0;
+            position: relative;
+            border-right: 1px solid var(--vscode-panel-border);
+        }
+        .response-panel {
+            border-right: none;
+        }
+        .panel-header {
+            padding: 8px 12px;
+            background: linear-gradient(to bottom, var(--vscode-titleBar-activeBackground), var(--vscode-editor-background));
             color: var(--vscode-titleBar-activeForeground);
-            padding: 5px 10px;
             font-weight: bold;
             border-bottom: 1px solid var(--vscode-panel-border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
         }
-        .panel-content { 
-            background-color: var(--vscode-editor-background);
-            padding: 10px;
-            overflow: auto;
-            max-height: 300px;
-            border: 1px solid var(--vscode-panel-border);
-        }
-        .response-success { color: var(--vscode-terminal-ansiGreen); }
-        .response-error { color: var(--vscode-terminal-ansiRed); }
-        .response-redirect { color: var(--vscode-terminal-ansiYellow); }
-        pre { 
-            margin: 0; 
-            white-space: pre-wrap; 
-            background-color: var(--vscode-textCodeBlock-background);
-            padding: 8px;
+        .panel-header .method {
+            padding: 2px 6px;
             border-radius: 3px;
+            margin-right: 8px;
+            font-size: 0.9em;
         }
-        .notes-area {
+        .panel-header .status {
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 0.9em;
+        }
+        .raw-content {
+            padding: 0;
+            margin: 0;
+            white-space: pre;
+            tab-size: 4;
+            counter-reset: line;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+        }
+        .raw-content .line {
+            display: block;
+            position: relative;
+            padding-left: 4em;
+            min-height: 1.5em;
+            padding-right: 1em;
+        }
+        .raw-content .line:before {
+            counter-increment: line;
+            content: counter(line);
+            position: absolute;
+            left: 0;
+            width: 3em;
+            text-align: right;
+            padding-right: 0.5em;
+            color: var(--vscode-editorLineNumber-foreground);
+            border-right: 1px solid var(--vscode-panel-border);
+        }
+        .raw-content .line:hover {
+            background-color: var(--vscode-editor-lineHighlightBackground);
+        }
+        .method-get { background-color: #61affe; color: white; }
+        .method-post { background-color: #49cc90; color: white; }
+        .method-put { background-color: #fca130; color: white; }
+        .method-delete { background-color: #f93e3e; color: white; }
+        .method-patch { background-color: #50e3c2; color: white; }
+        .status-2xx { background-color: #49cc90; color: white; }
+        .status-3xx { background-color: #fca130; color: white; }
+        .status-4xx, .status-5xx { background-color: #f93e3e; color: white; }
+        .notes-section {
+            padding: 10px;
+            border-top: 1px solid var(--vscode-panel-border);
+        }
+        textarea {
             width: 100%;
-            min-height: 80px;
+            min-height: 100px;
+            padding: 10px;
             background-color: var(--vscode-input-background);
             color: var(--vscode-input-foreground);
             border: 1px solid var(--vscode-input-border);
-            padding: 5px;
-            font-family: var(--vscode-font-family);
+            font-family: inherit;
         }
-        .host-info {
-            font-weight: bold;
-            margin-bottom: 5px;
-            color: var(--vscode-terminal-ansiBlue);
+        .code-refs {
+            padding: 10px;
+            border-top: 1px solid var(--vscode-panel-border);
         }
-        .code-reference {
-          margin-bottom: 15px;
-          border: 1px solid var(--vscode-panel-border);
-          border-radius: 3px;
+        .code-ref {
+            margin-bottom: 10px;
+            border: 1px solid var(--vscode-panel-border);
+            border-radius: 3px;
+            overflow: hidden;
         }
         .code-ref-header {
-          display: flex;
-          padding: 5px;
-          background-color: var(--vscode-editor-inactiveSelectionBackground);
-          font-size: 0.9em;
-          border-bottom: 1px solid var(--vscode-panel-border);
+            padding: 8px 12px;
+            background: linear-gradient(to bottom, var(--vscode-titleBar-activeBackground), var(--vscode-editor-background));
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
         .code-ref-file {
-          flex-grow: 1;
-          font-weight: bold;
+            font-weight: bold;
         }
         .code-ref-lines {
-          margin-right: 10px;
-          color: var(--vscode-descriptionForeground);
-        }
-        .code-ref-goto, .code-ref-delete {
-          background: none;
-          border: none;
-          color: var(--vscode-button-foreground);
-          background-color: var(--vscode-button-background);
-          border-radius: 3px;
-          padding: 2px 8px;
-          cursor: pointer;
-          margin-left: 5px;
+            color: var(--vscode-descriptionForeground);
         }
         .code-ref-content {
-          max-height: 150px;
-          overflow: auto;
-          margin: 0;
-          padding: 8px;
-          background-color: var(--vscode-textCodeBlock-background);
-          border-radius: 0 0 3px 3px;
-        }
-        .code-ref-date {
-          margin-right: 10px;
-          font-size: 0.85em;
-          color: var(--vscode-descriptionForeground);
-        }
-        .code-ref-invalid {
-          border-left: 3px solid var(--vscode-editorError-foreground);
-        }
-        .code-ref-warning {
-          padding: 5px 8px;
-          background-color: var(--vscode-inputValidation-errorBackground);
-          color: var(--vscode-inputValidation-errorForeground);
-          border: 1px solid var(--vscode-inputValidation-errorBorder);
-          font-size: 0.9em;
-          margin-top: 0;
-          border-radius: 0 0 3px 3px;
-        }
-        .code-ref-git {
-          padding: 4px 8px;
-          background-color: var(--vscode-editor-lineHighlightBackground);
-          font-size: 0.85em;
-          display: flex;
-          flex-wrap: wrap;
-          gap: 10px;
-          border-bottom: 1px solid var(--vscode-panel-border);
-        }
-        .code-ref-commit {
-          font-family: var(--vscode-editor-font-family);
-          color: var(--vscode-gitDecoration-addedResourceForeground);
-        }
-        .code-ref-branch {
-          color: var(--vscode-gitDecoration-modifiedResourceForeground);
+            padding: 10px;
+            background-color: var(--vscode-textCodeBlock-background);
+            overflow-x: auto;
+            margin: 0;
         }
         .code-ref-actions {
-          display: flex;
-          justify-content: flex-end;
-          padding: 4px 8px;
-          background-color: var(--vscode-editor-inactiveSelectionBackground);
-          border-bottom: 1px solid var(--vscode-panel-border);
+            padding: 8px;
+            background-color: var(--vscode-editor-background);
+            border-top: 1px solid var(--vscode-panel-border);
+            display: flex;
+            gap: 8px;
+        }
+        .code-ref button {
+            padding: 4px 8px;
+            background-color: var(--vscode-button-background);
+            color: var(--vscode-button-foreground);
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        .code-ref button:hover {
+            background-color: var(--vscode-button-hoverBackground);
+        }
+        .code-ref-invalid {
+            border-left: 3px solid var(--vscode-editorError-foreground);
+        }
+        .code-ref-warning {
+            padding: 8px;
+            background-color: var(--vscode-inputValidation-errorBackground);
+            color: var(--vscode-inputValidation-errorForeground);
+            border-top: 1px solid var(--vscode-inputValidation-errorBorder);
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="panel">
-            <div class="panel-header">Endpoint Notes</div>
-            <div class="panel-content">
-                <div class="host-info">${host}${endpoint}</div>
-                <textarea id="endpoint-notes" class="notes-area">${this.escapeHtml(
-                  endpointNotes
-                )}</textarea>
+        <div class="split-view">
+            <div class="request-panel">
+                <div class="panel-header">
+                    <div>
+                        <span class="method method-${data.request.method.toLowerCase()}">${
+      data.request.method
+    }</span>
+                        Request
+                    </div>
+                </div>
+                <div class="raw-content">
+                    ${this.formatRawRequest(data.request)}
+                </div>
             </div>
-            ${
-              data.codeReferences
-                ? this.generateCodeReferencesHtml(data.codeReferences)
-                : ''
-            }
-        </div>
-        
-        <div class="panel">
-            <div class="panel-header">Request Notes</div>
-            <div class="panel-content">
-                <textarea id="request-notes" class="notes-area">${this.escapeHtml(
-                  data.notes.request || ''
-                )}</textarea>
-            </div>
-        </div>
-        
-        <div class="panel">
-            <div class="panel-header">Request Details</div>
-            <div class="panel-content">
-                <div class="host-info">${host}</div>
-                ${data.request.method}&nbsp;${data.request.url}<br>
-                <pre>${this.formatHeaders(data.request.headers)}</pre>
-                ${
-                  data.request.body
-                    ? `<pre>${this.escapeAndFormatBody(
-                        data.request.body,
-                        data.request.headers['content-type']
-                      )}</pre>`
-                    : ''
-                }
+            
+            <div class="response-panel">
+                <div class="panel-header">
+                    <div>Response</div>
+                    ${
+                      data.response
+                        ? `<span class="status status-${Math.floor(
+                            data.response.statusCode / 100
+                          )}xx">${data.response.statusCode}</span>`
+                        : ''
+                    }
+                </div>
+                <div class="raw-content">
+                    ${
+                      data.response
+                        ? this.formatRawResponse(data.response)
+                        : '<div class="line">No response available</div>'
+                    }
+                </div>
             </div>
         </div>
         
         ${
-          data.response
+          data.codeReferences && data.codeReferences.length > 0
             ? `
-        <div class="panel">
-            <div class="panel-header">Response Details</div>
-            <div class="panel-content">
-                <span class="${this.getStatusClass(
-                  data.response.statusCode
-                )}">${data.response.statusCode} ${
-                data.response.statusMessage
-              }</span><br>
-                <pre>${this.formatHeaders(data.response.headers)}</pre>
-                ${
-                  data.response.body
-                    ? `<pre>${this.escapeAndFormatBody(
-                        data.response.body,
-                        data.response.headers['content-type']
-                      )}</pre>`
-                    : ''
-                }
-            </div>
+        <div class="code-refs">
+            <h3>Code References</h3>
+            ${data.codeReferences
+              .map((ref, index) => {
+                const validityClass =
+                  ref.isValid === false ? 'code-ref-invalid' : '';
+                const warningIcon = ref.isValid === false ? '⚠️ ' : '';
+                const creationDate = ref.createdAt
+                  ? new Date(ref.createdAt).toLocaleString()
+                  : 'Unknown date';
+
+                return `
+                    <div class="code-ref ${validityClass}" data-index="${index}">
+                        <div class="code-ref-header">
+                            <span class="code-ref-file">${this.escapeHtml(
+                              ref.filePath
+                            )}</span>
+                            <span class="code-ref-lines">Lines ${
+                              ref.startLine + 1
+                            }-${ref.endLine + 1}</span>
+                        </div>
+                        ${
+                          ref.gitInfo
+                            ? `
+                            <div class="code-ref-git">
+                                <span class="code-ref-commit" title="${
+                                  ref.gitInfo.commitHash
+                                }">Commit: ${ref.gitInfo.commitHash.substring(
+                                0,
+                                7
+                              )}</span>
+                                <span class="code-ref-branch">Branch: ${
+                                  ref.gitInfo.branch
+                                }</span>
+                            </div>
+                        `
+                            : ''
+                        }
+                        <pre class="code-ref-content">${warningIcon}${this.escapeHtml(
+                  ref.text
+                )}</pre>
+                        <div class="code-ref-actions">
+                            <button class="code-ref-goto" onclick="navigateToCode(${index})">Go to code</button>
+                            <button class="code-ref-validate" onclick="validateCode(${index})">Validate</button>
+                            <button class="code-ref-delete" onclick="removeCodeRef(${index})">Remove</button>
+                        </div>
+                        ${
+                          ref.isValid === false
+                            ? `
+                            <div class="code-ref-warning">
+                                This code reference is invalid: ${
+                                  ref.invalidReason ||
+                                  'The code may have been modified or deleted.'
+                                }
+                            </div>
+                        `
+                            : ''
+                        }
+                    </div>
+                `;
+              })
+              .join('')}
         </div>
         `
             : ''
         }
+        
+        <div class="notes-section">
+            <h3>Notes</h3>
+            <textarea id="notes" placeholder="Add notes about this request/response...">${
+              data.notes?.content || ''
+            }</textarea>
+        </div>
     </div>
 
     <script>
         const vscode = acquireVsCodeApi();
         
-        // Save notes when changed
-        document.getElementById('request-notes').addEventListener('input', (e) => {
+        function navigateToCode(index) {
+            vscode.postMessage({
+                command: 'navigateToCodeReference',
+                refIndex: index
+            });
+        }
+        
+        function validateCode(index) {
+            vscode.postMessage({
+                command: 'validateCodeReference',
+                refIndex: index
+            });
+        }
+        
+        function removeCodeRef(index) {
+            vscode.postMessage({
+                command: 'removeCodeReference',
+                refIndex: index
+            });
+        }
+        
+        document.getElementById('notes').addEventListener('change', () => {
             vscode.postMessage({
                 command: 'updateRequestNotes',
-                text: e.target.value
+                text: document.getElementById('notes').value
             });
         });
-        
-        document.getElementById('endpoint-notes').addEventListener('input', (e) => {
-            vscode.postMessage({
-                command: 'updateEndpointNotes',
-                text: e.target.value
-            });
-        });
-
-        document.querySelectorAll('.code-ref-goto').forEach((button, index) => {
-        button.addEventListener('click', () => {
-          const refIndex = button.closest('.code-reference').dataset.index;
-          vscode.postMessage({
-            command: 'navigateToCodeReference',
-            refIndex: parseInt(refIndex, 10)
-          });
-        });
-      });
-
-      // Handle code reference validation
-      document.querySelectorAll('.code-ref-validate').forEach((button, index) => {
-        button.addEventListener('click', () => {
-          const refIndex = button.closest('.code-reference').dataset.index;
-          vscode.postMessage({
-            command: 'validateCodeReference',
-            refIndex: parseInt(refIndex, 10)
-          });
-        });
-      });
-
-      // Handle code reference deletion
-      document.querySelectorAll('.code-ref-delete').forEach((button, index) => {
-        button.addEventListener('click', () => {
-          const refIndex = button.closest('.code-reference').dataset.index;
-          vscode.postMessage({
-            command: 'removeCodeReference',
-            refIndex: parseInt(refIndex, 10)
-          });
-        });
-      });
     </script>
 </body>
 </html>`;
   }
 
   /**
-   * Format headers for display
-   * @param {Object} headers Headers object
-   * @returns {string} Formatted headers
+   * Format raw request message
+   * @param {Object} request Request object
+   * @returns {string} Formatted request HTML
    */
-  static formatHeaders(headers) {
-    return Object.entries(headers)
-      .map(([key, value]) => `${key}: ${value}`)
-      .join('\n');
+  static formatRawRequest(request) {
+    const lines = [];
+
+    // Request line
+    lines.push(`${request.method} ${request.url} HTTP/1.1`);
+
+    // Headers
+    Object.entries(request.headers).forEach(([key, value]) => {
+      lines.push(`${key}: ${value}`);
+    });
+
+    // Empty line between headers and body
+    lines.push('');
+
+    // Body
+    if (request.body) {
+      if (typeof request.body === 'string') {
+        lines.push(...request.body.split('\n'));
+      } else {
+        try {
+          lines.push(...JSON.stringify(request.body, null, 2).split('\n'));
+        } catch (e) {
+          lines.push(String(request.body));
+        }
+      }
+    }
+
+    return lines
+      .map(line => `<div class="line">${this.escapeHtml(line)}</div>`)
+      .join('');
   }
 
   /**
-   * Format and escape body based on content type
-   * @param {string} body Body content
-   * @param {string} contentType Content type
-   * @returns {string} Formatted and escaped body
+   * Format raw response message
+   * @param {Object} response Response object
+   * @returns {string} Formatted response HTML
    */
-  static escapeAndFormatBody(body, contentType) {
-    try {
-      // For JSON content, format it nicely
-      if (contentType && contentType.includes('application/json')) {
-        return this.escapeHtml(JSON.stringify(JSON.parse(body), null, 2));
-      }
-      // For HTML content, escape it to show as code
-      else if (
-        contentType &&
-        (contentType.includes('text/html') ||
-          contentType.includes('application/html'))
-      ) {
-        return this.escapeHtml(body);
-      }
-    } catch (e) {
-      // If parsing fails, return the escaped original body
-    }
-    return this.escapeHtml(body || '');
-  }
+  static formatRawResponse(response) {
+    const lines = [];
 
-  /**
-   * Get CSS class for response status
-   * @param {number} statusCode HTTP status code
-   * @returns {string} CSS class name
-   */
-  static getStatusClass(statusCode) {
-    if (statusCode >= 200 && statusCode < 300) {
-      return 'response-success';
-    } else if (statusCode >= 400) {
-      return 'response-error';
-    } else if (statusCode >= 300) {
-      return 'response-redirect';
+    // Status line
+    lines.push(
+      `HTTP/1.1 ${response.statusCode} ${response.statusMessage || ''}`
+    );
+
+    // Headers
+    Object.entries(response.headers).forEach(([key, value]) => {
+      lines.push(`${key}: ${value}`);
+    });
+
+    // Empty line between headers and body
+    lines.push('');
+
+    // Body
+    if (response.body) {
+      if (typeof response.body === 'string') {
+        lines.push(...response.body.split('\n'));
+      } else {
+        try {
+          lines.push(...JSON.stringify(response.body, null, 2).split('\n'));
+        } catch (e) {
+          lines.push(String(response.body));
+        }
+      }
     }
-    return '';
+
+    return lines
+      .map(line => `<div class="line">${this.escapeHtml(line)}</div>`)
+      .join('');
   }
 
   /**

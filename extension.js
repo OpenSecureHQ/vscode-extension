@@ -46,6 +46,70 @@ async function activate(context) {
     treeDataProvider: requestsProvider,
   });
 
+  // Register choose storage location command
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      'openSecure.chooseStorageLocation',
+      async () => {
+        try {
+          // Get workspace folder for default path
+          const workspaceFolders = vscode.workspace.workspaceFolders;
+          const defaultUri =
+            workspaceFolders && workspaceFolders.length > 0
+              ? vscode.Uri.file(workspaceFolders[0].uri.fsPath)
+              : undefined;
+
+          // Show open dialog to choose directory
+          const selectedUri = await vscode.window.showOpenDialog({
+            canSelectFiles: false,
+            canSelectFolders: true,
+            canSelectMany: false,
+            openLabel: 'Select Storage Location',
+            defaultUri: defaultUri,
+          });
+
+          if (selectedUri && selectedUri[0]) {
+            const selectedPath = selectedUri[0].fsPath;
+
+            // Get current configuration
+            const config = vscode.workspace.getConfiguration('opensecure');
+
+            // Update configuration
+            await config.update(
+              'storageLocation',
+              selectedPath,
+              vscode.ConfigurationTarget.Workspace
+            );
+            await config.update(
+              'useWorkspaceStorage',
+              false,
+              vscode.ConfigurationTarget.Workspace
+            );
+
+            // Show success message
+            vscode.window.showInformationMessage(
+              `Storage location set to: ${selectedPath}`
+            );
+
+            // Reinitialize storage with new location
+            await storage.initialize();
+
+            // Update status bar
+            if (storage.initialized) {
+              statusBarItem.text = '$(database) OpenSecure';
+              statusBarItem.tooltip = `OpenSecure: Data stored in ${selectedPath}`;
+              statusBarItem.command = undefined;
+            }
+          }
+        } catch (error) {
+          vscode.window.showErrorMessage(
+            `Failed to set storage location: ${error.message}`
+          );
+        }
+      }
+    )
+  );
+
   // Start the server to listen for BURP data
   const server = createServer(3700, data => {
     if (storage.initialized) {
@@ -89,23 +153,6 @@ async function activate(context) {
   context.subscriptions.push(
     vscode.commands.registerCommand('openSecure.viewRequest', data => {
       RequestPanel.create(data);
-    })
-  );
-
-  // Register command to add endpoint notes
-  context.subscriptions.push(
-    vscode.commands.registerCommand('openSecure.addEndpointNotes', item => {
-      vscode.window
-        .showInputBox({
-          prompt: 'Enter notes for this endpoint',
-          value:
-            storage.getHosts()[item.host].endpoints[item.endpoint].notes || '',
-        })
-        .then(input => {
-          if (input !== undefined) {
-            storage.updateEndpointNotes(item.host, item.endpoint, input);
-          }
-        });
     })
   );
 
