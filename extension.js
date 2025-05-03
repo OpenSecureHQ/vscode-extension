@@ -4,6 +4,7 @@ const RequestsProvider = require('./view/requestsProvider');
 const RequestPanel = require('./view/requestsPanel');
 const storage = require('./data/storage');
 const path = require('path');
+const RequestCodeCommands = require('./intelligence/commands');
 
 /**
  * Activate the extension
@@ -14,6 +15,10 @@ async function activate(context) {
 
   // Initialize storage system
   await storage.initialize();
+
+  // Initialize request code finder commands
+  const requestCodeCommands = new RequestCodeCommands();
+  requestCodeCommands.registerCommands(context);
 
   // Create status bar item
   const statusBarItem = vscode.window.createStatusBarItem(

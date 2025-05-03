@@ -69,6 +69,11 @@
         "command": "openSecure.renameRequest",
         "title": "Rename Request",
         "icon": "$(edit)"
+      },
+      {
+        "command": "openSecure.findRequestCode",
+        "title": "Find Request Handler Code",
+        "icon": "$(search)"
       }
     ],
     "menus": {
@@ -97,6 +102,11 @@
         },
         {
           "command": "openSecure.renameRequest",
+          "when": "view == openSecureRequests && viewItem == request",
+          "group": "inline"
+        },
+        {
+          "command": "openSecure.findRequestCode",
           "when": "view == openSecureRequests && viewItem == request",
           "group": "inline"
         }
