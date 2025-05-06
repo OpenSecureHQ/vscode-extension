@@ -1,13 +1,40 @@
 const express = require('express');
 const { parseRequestResponse } = require('./utils/parser');
+const net = require('net');
+
+/**
+ * Find an available port starting from the given port
+ * @param {number} startPort - Port to start checking from
+ * @returns {Promise<number>} Available port number
+ */
+function findAvailablePort(startPort) {
+  return new Promise((resolve, reject) => {
+    const server = net.createServer();
+    server.unref();
+    server.on('error', err => {
+      if (err.code === 'EADDRINUSE') {
+        // Port is in use, try the next one
+        findAvailablePort(startPort + 1).then(resolve, reject);
+      } else {
+        reject(err);
+      }
+    });
+    server.listen(startPort, () => {
+      server.close(() => {
+        resolve(startPort);
+      });
+    });
+  });
+}
 
 /**
  * Creates an Express server to handle Burp Suite data
- * @param {number} port - Port number for the server
+ * @param {number} startPort - Starting port number to try
  * @param {Function} dataCallback - Callback to pass parsed data back to the extension
- * @returns {Object} The Express server instance
+ * @returns {Promise<Object>} The Express server instance and its port
  */
-function createServer(port = 3700, dataCallback) {
+async function createServer(startPort = 3700, dataCallback) {
+  const port = await findAvailablePort(startPort);
   const app = express();
   app.use(express.json({ limit: '50mb' }));
 
@@ -32,9 +59,11 @@ function createServer(port = 3700, dataCallback) {
     }
   });
 
-  return app.listen(port, () => {
+  const server = app.listen(port, () => {
     console.log(`Server running on http://localhost:${port}`);
   });
+
+  return { server, port };
 }
 
 module.exports = { createServer };

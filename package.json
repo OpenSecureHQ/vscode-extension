@@ -126,6 +126,12 @@
           "default": true,
           "description": "If true, stores data in workspace folder. If false, uses global storage location.",
           "scope": "resource"
+        },
+        "opensecure.serverPort": {
+          "type": "number",
+          "default": 3700,
+          "description": "Port number for the OpenSecure server to listen on",
+          "scope": "resource"
         }
       }
     }

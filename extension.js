@@ -116,7 +116,11 @@ async function activate(context) {
   );
 
   // Start the server to listen for BURP data
-  const server = createServer(3700, data => {
+  const config = vscode.workspace.getConfiguration('opensecure');
+  const startPort = config.get('serverPort', 3700);
+
+  // Create server and get its port
+  const { server, port } = await createServer(startPort, data => {
     if (storage.initialized) {
       storage.addRequest(data);
     } else {
@@ -132,6 +136,10 @@ async function activate(context) {
         });
     }
   });
+
+  // Update status bar to show the port
+  statusBarItem.text = `$(database) OpenSecure (Port: ${port})`;
+  statusBarItem.tooltip = `OpenSecure: Server running on port ${port}`;
 
   // Register create storage command
   context.subscriptions.push(
