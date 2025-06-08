@@ -667,6 +667,45 @@ async function activate(context) {
   }
 
   context.subscriptions.push(renameRequestDisposable);
+
+  // Register delete request command
+  context.subscriptions.push(
+    vscode.commands.registerCommand('openSecure.deleteRequest', async item => {
+      if (!item || !item.data) {
+        return;
+      }
+
+      // Show confirmation dialog
+      const answer = await vscode.window.showWarningMessage(
+        'Are you sure you want to delete this request?',
+        { modal: true },
+        'Yes',
+        'No'
+      );
+
+      if (answer !== 'Yes') {
+        return;
+      }
+
+      try {
+        // Get the request details from the item
+        const host = item.data.request.host;
+        const url = new URL(item.data.request.url, `http://${host}`);
+        const endpoint = url.pathname;
+        const method = item.data.request.method;
+
+        // Delete the request
+        storage.deleteRequest(host, endpoint, method, item.index);
+
+        // Show success message
+        vscode.window.showInformationMessage('Request deleted successfully');
+      } catch (error) {
+        vscode.window.showErrorMessage(
+          `Failed to delete request: ${error.message}`
+        );
+      }
+    })
+  );
 }
 
 /**

@@ -456,6 +456,46 @@ class Storage {
       this.notifyListeners();
     }
   }
+
+  /**
+   * Delete a specific request
+   * @param {string} host Host name
+   * @param {string} endpoint Endpoint path
+   * @param {string} method HTTP method
+   * @param {number} index Request index
+   */
+  deleteRequest(host, endpoint, method, index) {
+    if (
+      this.hosts[host] &&
+      this.hosts[host].endpoints[endpoint] &&
+      this.hosts[host].endpoints[endpoint][method] &&
+      this.hosts[host].endpoints[endpoint][method][index]
+    ) {
+      // Remove the request at the specified index
+      this.hosts[host].endpoints[endpoint][method].splice(index, 1);
+
+      // If this was the last request for this method, remove the method
+      if (this.hosts[host].endpoints[endpoint][method].length === 0) {
+        delete this.hosts[host].endpoints[endpoint][method];
+      }
+
+      // If this was the last method for this endpoint, remove the endpoint
+      if (Object.keys(this.hosts[host].endpoints[endpoint]).length === 0) {
+        delete this.hosts[host].endpoints[endpoint];
+      }
+
+      // If this was the last endpoint for this host, remove the host
+      if (Object.keys(this.hosts[host].endpoints).length === 0) {
+        delete this.hosts[host];
+      }
+
+      // Save the changes
+      this.saveData();
+
+      // Notify listeners
+      this.notifyListeners();
+    }
+  }
 }
 
 // Create and export a singleton instance

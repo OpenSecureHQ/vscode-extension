@@ -48,7 +48,7 @@
       },
       {
         "command": "openSecure.clearData",
-        "title": "Clear All Captured Data",
+        "title": "Clear All Data",
         "icon": "$(trash)"
       },
       {
@@ -62,18 +62,23 @@
       },
       {
         "command": "openSecure.chooseStorageLocation",
-        "title": "Choose Storage Location",
+        "title": "Change Storage Location",
         "icon": "$(folder)"
       },
       {
         "command": "openSecure.renameRequest",
-        "title": "Rename Request",
+        "title": "Rename",
         "icon": "$(edit)"
       },
       {
         "command": "openSecure.findRequestCode",
-        "title": "Find Request Handler Code",
+        "title": "Find Request Code",
         "icon": "$(search)"
+      },
+      {
+        "command": "openSecure.deleteRequest",
+        "title": "Delete Request",
+        "icon": "$(trash)"
       }
     ],
     "menus": {
@@ -81,37 +86,49 @@
         {
           "command": "openSecure.refresh",
           "when": "view == openSecureRequests",
-          "group": "navigation"
+          "group": "navigation@1"
         },
         {
           "command": "openSecure.clearData",
           "when": "view == openSecureRequests",
-          "group": "navigation"
+          "group": "navigation@2"
         },
         {
           "command": "openSecure.chooseStorageLocation",
           "when": "view == openSecureRequests",
-          "group": "navigation"
+          "group": "navigation@3"
         }
       ],
       "view/item/context": [
         {
           "command": "openSecure.addCodeReference",
           "when": "view == openSecureRequests && viewItem == request",
-          "group": "inline"
+          "group": "inline@1"
         },
         {
           "command": "openSecure.renameRequest",
           "when": "view == openSecureRequests && viewItem == request",
-          "group": "inline"
+          "group": "navigation@1"
         },
         {
           "command": "openSecure.findRequestCode",
           "when": "view == openSecureRequests && viewItem == request",
-          "group": "inline"
+          "group": "navigation@2"
+        },
+        {
+          "command": "openSecure.deleteRequest",
+          "when": "view == openSecureRequests && viewItem == request",
+          "group": "navigation@3"
         }
       ]
     },
+    "submenus": [
+      {
+        "id": "openSecure.requestMenu",
+        "label": "Request Options",
+        "icon": "$(globe)"
+      }
+    ],
     "configuration": {
       "title": "OpenSecure",
       "properties": {
