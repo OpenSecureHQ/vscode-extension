@@ -193,9 +193,16 @@ class Storage {
    */
   saveData() {
     try {
+      // Store current port information if it exists in the status bar
+      const currentText = this.statusBarItem ? this.statusBarItem.text : '';
+      const portMatch = currentText.match(/\(Port: (\d+)\)/);
+      const currentPort = portMatch ? portMatch[1] : null;
+
       // Update status bar if available
       if (this.statusBarItem) {
-        this.statusBarItem.text = '$(database) OpenSecure $(sync~spin)';
+        this.statusBarItem.text = `$(database) OpenSecure $(sync~spin)${
+          currentPort ? ` (Port: ${currentPort})` : ''
+        }`;
         this.statusBarItem.tooltip = 'OpenSecure: Saving data...';
       }
 
@@ -212,15 +219,18 @@ class Storage {
       console.log('Data saved to storage');
 
       // Update status bar after save
-      // Update status bar after save
       if (this.statusBarItem) {
         setTimeout(() => {
-          this.statusBarItem.text = '$(database) OpenSecure $(check)';
+          this.statusBarItem.text = `$(database) OpenSecure $(check)${
+            currentPort ? ` (Port: ${currentPort})` : ''
+          }`;
           this.statusBarItem.tooltip = `OpenSecure: Data saved to ${this.dataFile}`;
 
           // Revert back to normal after 2 seconds
           setTimeout(() => {
-            this.statusBarItem.text = '$(database) OpenSecure';
+            this.statusBarItem.text = `$(database) OpenSecure${
+              currentPort ? ` (Port: ${currentPort})` : ''
+            }`;
             this.statusBarItem.tooltip = `OpenSecure: Data automatically saved to ${this.dataFile}`;
           }, 2000);
         }, 300);
@@ -230,12 +240,20 @@ class Storage {
 
       // Update status bar to show error
       if (this.statusBarItem) {
-        this.statusBarItem.text = '$(database) OpenSecure $(error)';
+        const currentText = this.statusBarItem.text;
+        const portMatch = currentText.match(/\(Port: (\d+)\)/);
+        const currentPort = portMatch ? portMatch[1] : null;
+
+        this.statusBarItem.text = `$(database) OpenSecure $(error)${
+          currentPort ? ` (Port: ${currentPort})` : ''
+        }`;
         this.statusBarItem.tooltip = `OpenSecure: Error saving data: ${error.message}`;
 
         // Revert back to normal after 5 seconds
         setTimeout(() => {
-          this.statusBarItem.text = '$(database) OpenSecure';
+          this.statusBarItem.text = `$(database) OpenSecure${
+            currentPort ? ` (Port: ${currentPort})` : ''
+          }`;
           this.statusBarItem.tooltip = `OpenSecure: Data automatically saved to ${this.dataFile}`;
         }, 5000);
       }
