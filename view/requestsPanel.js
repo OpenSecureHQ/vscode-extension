@@ -39,17 +39,9 @@ class RequestPanel {
       return;
     }
 
-    // Create a unique ID for this request panel
-    const panelId = `${host}-${endpoint}-${method}-${requestIndex}`;
-
-    // Check if we already have a panel for this request
-    if (this.activePanels.has(panelId)) {
-      // If we do, just show it and refresh its content
-      const existingPanel = this.activePanels.get(panelId);
-      existingPanel.panel.reveal();
-      this.refreshPanel(existingPanel.panel, data);
-      return;
-    }
+    // Always create a new unique panel for each request (no reuse)
+    const panelKey = `${host}-${endpoint}-${method}-${requestIndex}`;
+    const panelId = `${panelKey}-${Date.now()}-${Math.random()}`;
 
     // Create and show panel
     const panel = vscode.window.createWebviewPanel(
@@ -69,6 +61,7 @@ class RequestPanel {
 
     // Store the panel info
     this.activePanels.set(panelId, {
+      panelId,
       panel,
       host,
       endpoint,
@@ -85,7 +78,17 @@ class RequestPanel {
     // Handle messages from the webview
     panel.webview.onDidReceiveMessage(
       message => {
+        // Always fetch latest data from storage after any code ref op
+        let updatedData;
         switch (message.command) {
+          case 'refreshPanel':
+            updatedData =
+              storage.getHosts()[host].endpoints[endpoint][method][
+                requestIndex
+              ];
+            this.activePanels.get(panelId).data = updatedData;
+            this.refreshPanel(panel, updatedData);
+            break;
           case 'updateRequestNotes':
             storage.updateRequestNotes(
               host,
@@ -94,6 +97,12 @@ class RequestPanel {
               requestIndex,
               message.text
             );
+            updatedData =
+              storage.getHosts()[host].endpoints[endpoint][method][
+                requestIndex
+              ];
+            this.activePanels.get(panelId).data = updatedData;
+            this.refreshPanel(panel, updatedData);
             break;
           case 'navigateToCodeReference':
             if (data.codeReferences && data.codeReferences[message.refIndex]) {
@@ -114,6 +123,12 @@ class RequestPanel {
                 message.refIndex,
                 data.codeReferences[message.refIndex]
               );
+              updatedData =
+                storage.getHosts()[host].endpoints[endpoint][method][
+                  requestIndex
+                ];
+              this.activePanels.get(panelId).data = updatedData;
+              this.refreshPanel(panel, updatedData);
             }
             break;
           case 'removeCodeReference':
@@ -125,19 +140,21 @@ class RequestPanel {
                 requestIndex,
                 message.refIndex
               );
-
-              // Get updated data
-              const updatedData =
+              updatedData =
                 storage.getHosts()[host].endpoints[endpoint][method][
                   requestIndex
                 ];
-
-              // Update local data reference
               this.activePanels.get(panelId).data = updatedData;
-
-              // Refresh the panel
               this.refreshPanel(panel, updatedData);
             }
+            break;
+          default:
+            updatedData =
+              storage.getHosts()[host].endpoints[endpoint][method][
+                requestIndex
+              ];
+            this.activePanels.get(panelId).data = updatedData;
+            this.refreshPanel(panel, updatedData);
             break;
         }
       },
@@ -155,12 +172,19 @@ class RequestPanel {
    * @param {Object} updatedData The updated data
    */
   static updatePanel(host, endpoint, method, requestIndex, updatedData) {
-    const panelId = `${host}-${endpoint}-${method}-${requestIndex}`;
-
-    if (this.activePanels.has(panelId)) {
-      const panelInfo = this.activePanels.get(panelId);
-      panelInfo.data = updatedData;
-      this.refreshPanel(panelInfo.panel, updatedData);
+    // Find all panels that match this request
+    for (const [panelId, panelInfo] of this.activePanels.entries()) {
+      if (
+        panelInfo.host === host &&
+        panelInfo.endpoint === endpoint &&
+        panelInfo.method === method &&
+        panelInfo.requestIndex === requestIndex
+      ) {
+        // Update the panel's data
+        panelInfo.data = updatedData;
+        // Force refresh the panel
+        this.refreshPanel(panelInfo.panel, updatedData);
+      }
     }
   }
 
@@ -204,16 +228,34 @@ class RequestPanel {
                 `
               : '';
 
+            // Construct remote URL if possible
+            let remoteUrl = '';
+            if (
+              ref.gitInfo &&
+              ref.gitInfo.remoteUrl &&
+              ref.gitInfo.commitHash
+            ) {
+              // Assume remoteUrl is like https://github.com/org/repo
+              // filePath is relative to repo root
+              remoteUrl = `${ref.gitInfo.remoteUrl.replace(/\/$/, '')}/blob/${
+                ref.gitInfo.commitHash
+              }/${ref.filePath}#L${ref.startLine + 1}-L${ref.endLine + 1}`;
+            }
+
             return `
           <div class="code-reference ${validityClass}" data-index="${index}">
             <div class="code-ref-header">
               <span class="code-ref-file">${this.escapeHtml(
                 ref.filePath
               )}</span>
+              ${
+                remoteUrl
+                  ? `<a href="${remoteUrl}" target="_blank" class="code-ref-link">View on GitHub</a>`
+                  : ''
+              }
               <span class="code-ref-lines">Lines ${ref.startLine + 1}-${
               ref.endLine + 1
             }</span>
-              <span class="code-ref-date" title="Created on ${creationDate}">Added: ${creationDate}</span>
             </div>
             ${gitInfo}
             <div class="code-ref-actions">
@@ -221,9 +263,9 @@ class RequestPanel {
               <button class="code-ref-validate">Validate</button>
               <button class="code-ref-delete">Remove</button>
             </div>
-            <pre class="code-ref-content">${warningIcon}${this.escapeHtml(
-              ref.text
-            )}</pre>
+            <pre class="code-ref-content" style="font-family: 'Fira Mono', 'Consolas', 'Monaco', monospace; font-size: 13px; background: #222; color: #eee; border-radius: 4px; padding: 10px; overflow-x: auto;">
+${warningIcon}${this.escapeHtml(ref.text)}
+            </pre>
             ${
               ref.isValid === false
                 ? `<div class="code-ref-warning">This code reference is invalid: ${
@@ -247,6 +289,7 @@ class RequestPanel {
    * @param {Object} data Updated data
    */
   static refreshPanel(panel, data) {
+    if (!panel || !panel.webview) return;
     panel.webview.html = this.generateHtml(data);
   }
 
@@ -273,6 +316,7 @@ class RequestPanel {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Request Details</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codicons/0.0.1/codicon.min.css">
     <style>
         body {
             font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
@@ -284,12 +328,39 @@ class RequestPanel {
         .container {
             display: flex;
             flex-direction: column;
-            height: 100vh;
+            min-height: 100vh;
+            overflow-y: auto;
+        }
+        .panel-controls {
+            padding: 8px 12px;
+            background: var(--vscode-editor-background);
+            border-bottom: 1px solid var(--vscode-panel-border);
+            display: flex;
+            justify-content: flex-end;
+        }
+        .refresh-button {
+            background: var(--vscode-button-background);
+            color: var(--vscode-button-foreground);
+            border: none;
+            cursor: pointer;
+            padding: 6px 12px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            border-radius: 4px;
+            font-size: 12px;
+            transition: background-color 0.2s ease;
+        }
+        .refresh-button:hover {
+            background: var(--vscode-button-hoverBackground);
+        }
+        .refresh-button .codicon {
+            font-size: 14px;
         }
         .split-view {
             display: flex;
             flex: 1;
-            overflow: hidden;
+            min-height: fit-content;
         }
         .request-panel, .response-panel {
             flex: 1;
@@ -311,16 +382,15 @@ class RequestPanel {
             align-items: center;
             justify-content: space-between;
         }
-        .panel-header .method {
-            padding: 2px 6px;
-            border-radius: 3px;
-            margin-right: 8px;
-            font-size: 0.9em;
+        .panel-header .left {
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
-        .panel-header .status {
-            padding: 2px 6px;
-            border-radius: 3px;
-            font-size: 0.9em;
+        .panel-header .right {
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
         .raw-content {
             padding: 0;
@@ -360,82 +430,151 @@ class RequestPanel {
         .status-3xx { background-color: #fca130; color: white; }
         .status-4xx, .status-5xx { background-color: #f93e3e; color: white; }
         .notes-section {
-            padding: 10px;
+            padding: 16px;
             border-top: 1px solid var(--vscode-panel-border);
+        }
+        .notes-section h3 {
+            margin-top: 0;
+            margin-bottom: 12px;
+            color: var(--vscode-editor-foreground);
         }
         textarea {
             width: 100%;
             min-height: 100px;
-            padding: 10px;
+            padding: 12px;
             background-color: var(--vscode-input-background);
             color: var(--vscode-input-foreground);
             border: 1px solid var(--vscode-input-border);
             font-family: inherit;
+            border-radius: 4px;
+            resize: vertical;
+        }
+        textarea:focus {
+            outline: none;
+            border-color: var(--vscode-focusBorder);
         }
         .code-refs {
-            padding: 10px;
+            padding: 16px;
             border-top: 1px solid var(--vscode-panel-border);
         }
+        .code-refs-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        .code-refs-title {
+            font-size: 16px;
+            font-weight: bold;
+            color: var(--vscode-editor-foreground);
+        }
         .code-ref {
-            margin-bottom: 10px;
+            margin-bottom: 16px;
             border: 1px solid var(--vscode-panel-border);
-            border-radius: 3px;
+            border-radius: 6px;
             overflow: hidden;
+            background-color: var(--vscode-editor-background);
+            transition: all 0.2s ease;
+        }
+        .code-ref:hover {
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+            transform: translateY(-1px);
         }
         .code-ref-header {
-            padding: 8px 12px;
+            padding: 12px;
             background: linear-gradient(to bottom, var(--vscode-titleBar-activeBackground), var(--vscode-editor-background));
             display: flex;
             justify-content: space-between;
             align-items: center;
+            border-bottom: 1px solid var(--vscode-panel-border);
         }
         .code-ref-file {
             font-weight: bold;
+            color: var(--vscode-editor-foreground);
         }
         .code-ref-lines {
             color: var(--vscode-descriptionForeground);
+            font-size: 0.9em;
         }
         .code-ref-content {
-            padding: 10px;
+            padding: 16px;
             background-color: var(--vscode-textCodeBlock-background);
             overflow-x: auto;
             margin: 0;
+            font-family: 'Fira Code', 'Consolas', 'Monaco', monospace;
+            font-size: 13px;
+            line-height: 1.5;
+            border-radius: 0 0 6px 6px;
         }
         .code-ref-actions {
-            padding: 8px;
+            padding: 12px;
             background-color: var(--vscode-editor-background);
             border-top: 1px solid var(--vscode-panel-border);
             display: flex;
             gap: 8px;
         }
         .code-ref button {
-            padding: 4px 8px;
+            padding: 6px 12px;
             background-color: var(--vscode-button-background);
             color: var(--vscode-button-foreground);
             border: none;
-            border-radius: 3px;
+            border-radius: 4px;
             cursor: pointer;
+            font-size: 12px;
+            transition: background-color 0.2s ease;
         }
         .code-ref button:hover {
             background-color: var(--vscode-button-hoverBackground);
         }
         .code-ref-invalid {
-            border-left: 3px solid var(--vscode-editorError-foreground);
+            border-left: 4px solid var(--vscode-editorError-foreground);
         }
         .code-ref-warning {
-            padding: 8px;
+            padding: 12px;
             background-color: var(--vscode-inputValidation-errorBackground);
             color: var(--vscode-inputValidation-errorForeground);
             border-top: 1px solid var(--vscode-inputValidation-errorBorder);
+            font-size: 0.9em;
+        }
+        .code-ref-link {
+            color: var(--vscode-textLink-foreground);
+            text-decoration: none;
+            font-size: 0.9em;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .code-ref-link:hover {
+            text-decoration: underline;
+        }
+        .code-ref-git {
+            margin: 8px 12px;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            font-size: 0.9em;
+        }
+        .code-ref-commit {
+            color: var(--vscode-descriptionForeground);
+            font-family: 'Fira Code', 'Consolas', 'Monaco', monospace;
+        }
+        .code-ref-branch {
+            color: var(--vscode-descriptionForeground);
         }
     </style>
 </head>
 <body>
     <div class="container">
+        <div class="panel-controls">
+            <button class="refresh-button" onclick="refreshPanel()" title="Refresh entire panel">
+                <span class="codicon codicon-refresh"></span>
+                Refresh Panel
+            </button>
+        </div>
         <div class="split-view">
             <div class="request-panel">
                 <div class="panel-header">
-                    <div>
+                    <div class="left">
                         <span class="method method-${data.request.method.toLowerCase()}">${
       data.request.method
     }</span>
@@ -449,14 +588,16 @@ class RequestPanel {
             
             <div class="response-panel">
                 <div class="panel-header">
-                    <div>Response</div>
-                    ${
-                      data.response
-                        ? `<span class="status status-${Math.floor(
-                            data.response.statusCode / 100
-                          )}xx">${data.response.statusCode}</span>`
-                        : ''
-                    }
+                    <div class="left">Response</div>
+                    <div class="right">
+                        ${
+                          data.response
+                            ? `<span class="status status-${Math.floor(
+                                data.response.statusCode / 100
+                              )}xx">${data.response.statusCode}</span>`
+                            : ''
+                        }
+                    </div>
                 </div>
                 <div class="raw-content">
                     ${
@@ -472,7 +613,12 @@ class RequestPanel {
           data.codeReferences && data.codeReferences.length > 0
             ? `
         <div class="code-refs">
-            <h3>Code References</h3>
+            <div class="code-refs-header">
+                <div class="code-refs-title">
+                    <span class="codicon codicon-references"></span>
+                    Code References
+                </div>
+            </div>
             ${data.codeReferences
               .map((ref, index) => {
                 const validityClass =
@@ -481,16 +627,37 @@ class RequestPanel {
                 const creationDate = ref.createdAt
                   ? new Date(ref.createdAt).toLocaleString()
                   : 'Unknown date';
-
+                let remoteUrl = '';
+                if (
+                  ref.gitInfo &&
+                  ref.gitInfo.remoteUrl &&
+                  ref.gitInfo.commitHash
+                ) {
+                  remoteUrl = `${ref.gitInfo.remoteUrl.replace(
+                    /\/$/,
+                    ''
+                  )}/blob/${ref.gitInfo.commitHash}/${ref.filePath}#L${
+                    ref.startLine + 1
+                  }-L${ref.endLine + 1}`;
+                }
                 return `
                     <div class="code-ref ${validityClass}" data-index="${index}">
                         <div class="code-ref-header">
-                            <span class="code-ref-file">${this.escapeHtml(
-                              ref.filePath
-                            )}</span>
-                            <span class="code-ref-lines">Lines ${
-                              ref.startLine + 1
-                            }-${ref.endLine + 1}</span>
+                            <div class="left">
+                                <span class="code-ref-file">${this.escapeHtml(
+                                  ref.filePath
+                                )}</span>
+                                <span class="code-ref-lines">Lines ${
+                                  ref.startLine + 1
+                                }-${ref.endLine + 1}</span>
+                            </div>
+                            <div class="right">
+                                ${
+                                  remoteUrl
+                                    ? `<a href="${remoteUrl}" target="_blank" class="code-ref-link">$(link-external) View on GitHub</a>`
+                                    : ''
+                                }
+                            </div>
                         </div>
                         ${
                           ref.gitInfo
@@ -498,11 +665,11 @@ class RequestPanel {
                             <div class="code-ref-git">
                                 <span class="code-ref-commit" title="${
                                   ref.gitInfo.commitHash
-                                }">Commit: ${ref.gitInfo.commitHash.substring(
+                                }">$(git-commit) ${ref.gitInfo.commitHash.substring(
                                 0,
                                 7
                               )}</span>
-                                <span class="code-ref-branch">Branch: ${
+                                <span class="code-ref-branch">$(git-branch) ${
                                   ref.gitInfo.branch
                                 }</span>
                             </div>
@@ -513,15 +680,24 @@ class RequestPanel {
                   ref.text
                 )}</pre>
                         <div class="code-ref-actions">
-                            <button class="code-ref-goto" onclick="navigateToCode(${index})">Go to code</button>
-                            <button class="code-ref-validate" onclick="validateCode(${index})">Validate</button>
-                            <button class="code-ref-delete" onclick="removeCodeRef(${index})">Remove</button>
+                            <button class="code-ref-goto" onclick="navigateToCode(${index})">
+                                <span class="codicon codicon-go-to-file"></span>
+                                Go to code
+                            </button>
+                            <button class="code-ref-validate" onclick="validateCode(${index})">
+                                <span class="codicon codicon-check"></span>
+                                Validate
+                            </button>
+                            <button class="code-ref-delete" onclick="removeCodeRef(${index})">
+                                <span class="codicon codicon-trash"></span>
+                                Remove
+                            </button>
                         </div>
                         ${
                           ref.isValid === false
                             ? `
                             <div class="code-ref-warning">
-                                This code reference is invalid: ${
+                                $(warning) This code reference is invalid: ${
                                   ref.invalidReason ||
                                   'The code may have been modified or deleted.'
                                 }
@@ -548,6 +724,12 @@ class RequestPanel {
 
     <script>
         const vscode = acquireVsCodeApi();
+        
+        function refreshPanel() {
+            vscode.postMessage({
+                command: 'refreshPanel'
+            });
+        }
         
         function navigateToCode(index) {
             vscode.postMessage({

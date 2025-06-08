@@ -243,7 +243,6 @@ async function activate(context) {
   });
 
   // Register command to add code reference to a request
-  // Register command to add code reference to a request
   context.subscriptions.push(
     vscode.commands.registerCommand(
       'openSecure.addCodeReference',
@@ -346,6 +345,7 @@ async function activate(context) {
           return;
         }
 
+        // Add the code reference
         storage.addCodeReference(host, endpoint, method, requestIndex, codeRef);
 
         // Get the updated data from storage
@@ -353,7 +353,6 @@ async function activate(context) {
           hosts[host].endpoints[endpoint][method][requestIndex];
 
         // Update any open panels for this request
-        const RequestPanel = require('./view/requestsPanel');
         RequestPanel.updatePanel(
           host,
           endpoint,
