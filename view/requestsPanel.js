@@ -665,11 +665,11 @@ ${warningIcon}${this.escapeHtml(ref.text)}
                             <div class="code-ref-git">
                                 <span class="code-ref-commit" title="${
                                   ref.gitInfo.commitHash
-                                }">$(git-commit) ${ref.gitInfo.commitHash.substring(
+                                }">Git Commit: ${ref.gitInfo.commitHash.substring(
                                 0,
                                 7
                               )}</span>
-                                <span class="code-ref-branch">$(git-branch) ${
+                                <span class="code-ref-branch">Git Branch: ${
                                   ref.gitInfo.branch
                                 }</span>
                             </div>
